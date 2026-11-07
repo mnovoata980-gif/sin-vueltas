@@ -1,0 +1,31 @@
+# Rebuilds the app every day with TransMilenio's newest routes and publishes it on GitHub Pages.
+# TransMilenio's daily file appears around 09:20 UTC (4:20 a. m. in Bogotá).
+name: Actualizar rutas
+on:
+  schedule:
+    - cron: '30 10 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tools/update.js
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

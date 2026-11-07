@@ -1,0 +1,7 @@
+{
+  "_info": "Datos que decide el dueño de la app. Si un campo queda vacío, la app lo dice en lugar de inventarlo.",
+  "owner": "",
+  "contact": "",
+  "reportEmail": "",
+  "reportForm": ""
+}
