@@ -18,14 +18,9 @@
           <span class="sum-text"><b id="sumRoute"></b><small id="sumOpts"></small></span>
           <span class="change">Cambiar</span>
         </button>
-      </div>
-      <div class="panel-first">
-        <button type="button" class="dest" id="askDest">
-          <svg class="to-pin" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 22.5s7.5-7 7.5-12.6a7.5 7.5 0 1 0-15 0c0 5.6 7.5 12.6 7.5 12.6z"/><circle cx="12" cy="9.8" r="2.6" fill="#ffffff"/></svg>
-          <span id="destText"></span>
+        <button type="button" class="swap sum-swap" id="sumSwap" aria-label="Invertir el viaje: ir del destino al origen">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v13M6 16l-3-3M6 16l3-3M14 17V4M14 4l-3 3M14 4l3 3"/></svg>
         </button>
-        <div class="quick" id="quick" hidden></div>
-        <button type="button" class="from-line" id="fromLine"><span id="fromText"></span><span class="change">Cambiar</span></button>
       </div>
       <div class="panel-full">
         <div class="route-fields">
@@ -37,10 +32,11 @@
             <button type="button" class="field" id="fromField"><small>Desde</small><span></span></button>
             <button type="button" class="field" id="toField"><small>Hasta</small><span></span></button>
           </div>
-          <button type="button" class="swap" id="swap" aria-label="Intercambiar origen y destino">
+          <button type="button" class="swap" id="swap" aria-label="Invertir: el destino pasa a ser el origen">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3v13M6 16l-3-3M6 16l3-3M14 17V4M14 4l-3 3M14 4l3 3"/></svg>
           </button>
         </div>
+        <div class="quick" id="quick" hidden></div>
         <div class="ctl limit-ctl">
           <span class="lbl" id="limitLbl">Máximo de buses</span>
           <div class="limit" role="group" aria-labelledby="limitLbl">

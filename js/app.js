@@ -226,7 +226,7 @@ window.SVBoot = function (networkText) {
   const state = {
     from: null,
     to: null,
-    fromGps: WEB,
+    fromGps: false,
     limit: saved && saved.limit || 2, walk: saved && saved.walk || 10, pref: saved && saved.pref || 'buses',
     card: saved && saved.card || 'unknown', voice: !(saved && saved.voice === false),
     lite: saved && saved.lite || 'auto', glance: !(saved && saved.glance === false), mapDark: !!(saved && saved.mapDark),
@@ -281,12 +281,17 @@ window.SVBoot = function (networkText) {
     target = which || target;
     const field = target;
     $('picker').hidden = true; $('mapSheet').hidden = true;
+    if (field === 'from') state.fromGps = true;
     render();
     const g = await locate();
-    if (g) { state[field] = gpsPlace(); if (field === 'from') state.fromGps = true; state.example = false; if (state.mode === 'pick') state.mode = 'now'; persist(); }
+    if (g) { state[field] = gpsPlace(); state.example = false; state.formOpen = false; if (state.mode === 'pick') state.mode = 'now'; remember(); persist(); }
+    else if (field === 'from') state.fromGps = false;
     render();
     // Without a position the trip can still go on: the rider says what they are near.
     if (!g && field === 'from' && state.to) openPicker('from');
+    // Then the other end, if it is still missing.
+    else if (g && field === 'from' && !state.to) openPicker('to');
+    else if (g && field === 'to' && !state.from) openPicker('from');
   }
   function gpsProblem() {
     if (state.gpsState === 'denied') return 'No tenemos permiso para ver tu ubicación. Dinos cerca de qué estás, o actívala en los ajustes del navegador para este sitio.';
@@ -296,11 +301,6 @@ window.SVBoot = function (networkText) {
   }
 
   // ---------- form rendering ----------
-  const fromLine = () => {
-    if (state.gpsState === 'asking' && (!state.from || state.from.kind === 'gps')) return 'Buscando tu ubicación…';
-    if (state.from) return state.from.kind === 'gps' ? `Sales de tu ubicación · cerca de ${nearestLabel(state.from.lat, state.from.lon)}` : `Sales de ${state.from.name}`;
-    return WEB && !gpsProblem() ? 'Sales de tu ubicación' : 'Elige de dónde sales';
-  };
   function renderForm() {
     const setField = (id, p, ph) => {
       const el = $(id).querySelector('span');
@@ -308,9 +308,13 @@ window.SVBoot = function (networkText) {
       else el.textContent = p ? p.name : ph;
       el.className = p ? '' : 'empty';
     };
-    const locating = state.gpsState === 'asking';
-    setField('fromField', state.from, locating ? 'Buscando tu ubicación…' : (WEB ? 'Toca para usar tu ubicación' : 'Elige de dónde sales'));
-    setField('toField', state.to, 'Toca para elegir');
+    // The trip can start anywhere: tomorrow's trip from work, a friend's house. The rider's location is one choice
+    // among others in the "Desde" list, never filled in on its own.
+    const locatingFrom = state.gpsState === 'asking' && state.fromGps;
+    setField('fromField', state.from, locatingFrom ? 'Buscando tu ubicación…' : 'Tu ubicación u otro lugar');
+    setField('toField', state.to, 'Lugar, dirección o estación');
+    const canSwap = !!(state.from || state.to);
+    $('swap').setAttribute('aria-disabled', String(!canSwap));
     $('ask').textContent = state.from && state.to ? 'Cambia tu viaje' : state.to ? '¿De dónde sales?' : '¿Para dónde vas?';
     document.querySelectorAll('[data-limit]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.limit === state.limit)));
     document.querySelectorAll('[data-walk]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.walk === state.walk)));
@@ -325,18 +329,13 @@ window.SVBoot = function (networkText) {
     $('panel').classList.toggle('is-first', !hasTrip);
     $('panel').classList.toggle('is-collapsed', collapsed);
     $('panel').classList.toggle('has-trip', hasTrip);
-    if (!hasTrip) {
-      $('destText').textContent = state.to ? state.to.name : 'Busca un lugar, dirección o estación';
-      $('destText').className = state.to ? '' : 'empty';
-      $('fromText').textContent = fromLine();
-      const chips = [];
-      if (!state.to) {
-        // Only the places the rider saved, always in the same order: the app does not guess where they are going.
-        for (const k of ['casa', 'trabajo']) if (state.favs[k]) chips.push(`<button type="button" class="chip" data-go-fav="${k}">${icon(k === 'casa' ? 'home' : 'work')}<span>${k === 'casa' ? 'Casa' : 'Trabajo'}</span></button>`);
-      }
-      $('quick').hidden = !chips.length;
-      $('quick').innerHTML = chips.join('');
+    const chips = [];
+    if (!hasTrip && !state.to) {
+      // Only the places the rider saved, always in the same order: the app does not guess where they are going.
+      for (const k of ['casa', 'trabajo']) if (state.favs[k]) chips.push(`<button type="button" class="chip" data-go-fav="${k}">${icon(k === 'casa' ? 'home' : 'work')}<span>Ir a ${k === 'casa' ? 'Casa' : 'Trabajo'}</span></button>`);
     }
+    $('quick').hidden = !chips.length;
+    $('quick').innerHTML = chips.join('');
     document.body.classList.toggle('trip-view', collapsed);
     if (hasTrip) {
       const q = currentQuery();
@@ -438,7 +437,7 @@ window.SVBoot = function (networkText) {
         ${tripStrip(o)}
         <p class="meta"><b class="price">${esc(price.chip)}</b> · caminas ${mins(o.walk)} min · esperas ~${mins(o.wait)} min</p>`;
     if (!open) {
-      return `<details class="card"><summary>${head}${priceNote}<span class="more">Ver el paso a paso</span></summary><ol class="steps">${stepsHtml(o)}</ol>${actions}</details>`;
+      return `<details class="card"><summary>${tag ? `<span class="mini-tag">${esc(tag)}</span>` : ''}${head}${priceNote}<span class="more">Ver el paso a paso</span></summary><ol class="steps">${stepsHtml(o)}</ol>${actions}</details>`;
     }
     // The main option keeps where to get on, where to get off and the actions together, on the first screen.
     const hops = rides.length === 1
@@ -502,6 +501,10 @@ window.SVBoot = function (networkText) {
       const fewer = r.ranked.filter(o => o.buses < best.buses).sort((a, b) => a.total - b.total)[0];
       if (fewer) out.push(`${mins(fewer.total - best.total)} min menos que con ${busWord(fewer.buses)}`);
       else if (r.fewest === best.buses) out.push('Es el mínimo de buses posible');
+      // How hard the change is matters as much as how many there are.
+      const changes = best.legs.filter(l => l.change).map(l => l.change);
+      if (changes.every(c => c === 'station')) out.push(changes.length > 1 ? 'Cambias sin salir de las estaciones' : 'Cambias sin salir de la estación');
+      else if (changes.every(c => c === 'stop')) out.push('Cambias en el mismo paradero');
     }
     if (best.walk <= 300) out.push(`Caminas solo ${mins(best.walk)} min`);
     if (best.legs.every(l => l.type !== 'ride' || l.hwAll <= 480)) out.push(best.buses === 1 ? 'Pasa seguido' : 'Pasan seguido');
@@ -530,7 +533,7 @@ window.SVBoot = function (networkText) {
       const sayNear = `<button type="button" class="btn${problem ? ' primary' : ''} wide" id="sayNear">Decir cerca de qué estoy</button>`;
       html += `<section class="enable">
         <h2>Mira qué buses tienes cerca</h2>
-        <p>Con tu ubicación te decimos cómo llegar con los buses que pasan por donde estás. Si prefieres no activarla, dinos cerca de qué estás.</p>
+        <p>Con tu ubicación te mostramos los buses que pasan cerca de ti. Si prefieres no activarla, dinos cerca de qué estás.</p>
         ${problem ? `<div class="notice">${esc(problem)}</div>` : ''}
         <div class="enable-actions">${problem ? sayNear + useGps : useGps + sayNear}</div>
         <p class="fine-line">Tu ubicación se usa en tu teléfono para calcular la ruta. No la guardamos ni la enviamos a ningún servidor nuestro. Si abres el mapa, este descarga la zona que estás viendo.</p>
@@ -552,8 +555,8 @@ window.SVBoot = function (networkText) {
     const q = currentQuery();
     if (state.routeView) { lastOptions = []; box.innerHTML = routeHtml(state.routeView); return; }
     // Only mention the wait if it is noticeable, so fast phones never flash a message.
-    const notice = setTimeout(() => { if (seq === renderSeq) box.innerHTML = '<p class="calc">Calculando tu ruta…</p>'; }, 250);
-    Planner.recommend({ from: state.from, to: state.to, day: q.day, time: q.time, arriveBy: q.arriveBy, limit: state.limit, maxWalk: state.walk * 60, pref: state.pref }).then(r => {
+    const notice = setTimeout(() => { if (seq === renderSeq) box.innerHTML = '<p class="calc">Calculando tu ruta…</p><div class="calc-card" aria-hidden="true"><i></i><i></i><i></i></div>'; }, 250);
+    Planner.recommend({ from: state.from, to: state.to, day: q.day, time: q.time, arriveBy: q.arriveBy, limit: state.limit, maxWalk: state.walk * 60, pref: state.pref, card: state.card }).then(r => {
       clearTimeout(notice);
       if (seq === renderSeq) showResults(r, q);
     });
@@ -600,6 +603,7 @@ window.SVBoot = function (networkText) {
 
     const best = r.ranked[0], first = best.legs.find(l => l.type === 'ride');
     const faster = r.ranked.filter(o => o.buses > best.buses).sort((a, b) => a.total - b.total)[0];
+    const quickest = r.ranked.reduce((a, o) => (o.total < a.total ? o : a), best);
     let extra = '';
     // A faster trip is only a good deal if the rider knows what it costs.
     const costOf = o => {
@@ -612,11 +616,17 @@ window.SVBoot = function (networkText) {
     if (arriving) {
       const route = best.buses === 1 ? `Toma el ${first.code}` : `Vas en ${busWord(best.buses)}`;
       extra = `${route} y llegas cerca de las ${clock(best.arrive)}${r.margin >= 120 ? ` Incluye ${mins(r.margin)} min de margen por si el bus tarda.` : ''}`;
-    } else if (faster) {
+    } else if (faster && best.total - faster.total > 30) {
       const s = best.total - faster.total;
       if (s >= 300) extra = `Con ${busWord(faster.buses)} llegarías ${mins(s)} min antes.${costOf(faster)}`;
-      else if (s > 30) extra = `Otro bus solo te ahorra ${mins(s)} min. No vale el transbordo.`;
-    } else if (beyond && beyond.saves >= 300) extra = `Si aceptaras ${busWord(beyond.buses)}, llegarías ${mins(beyond.saves)} min antes.${costOf(beyond.options[0])}`;
+      else extra = `Otro bus solo te ahorra ${mins(s)} min. No vale el transbordo.`;
+    } else if (quickest !== best && best.total - quickest.total >= 300) {
+      // A faster trip with no more buses was set aside for a reason the rider should see.
+      const why = quickest.walk - best.walk >= 180 ? `caminas ${mins(quickest.walk - best.walk)} min más`
+        : quickest.legs.some(l => l.change === 'walk') && !best.legs.some(l => l.change === 'walk') ? 'cambias de bus caminando a otro paradero'
+        : 'sus buses pasan menos seguido';
+      extra = `La opción más rápida llega ${mins(best.total - quickest.total)} min antes, pero ${why}. La ves abajo.${costOf(quickest)}`;
+    } else if (beyond && best.total - beyond.options[0].total >= 300) extra = `Si aceptaras ${busWord(beyond.buses)}, llegarías ${mins(best.total - beyond.options[0].total)} min antes.${costOf(beyond.options[0])}`;
     if (r.night) extra = `${extra} De noche damos prioridad a caminar y esperar menos.`.trim();
     // Late at night the best trip can start with hours of waiting, and the rider should know why.
     if (!arriving && first.wait >= 1800) {
@@ -637,8 +647,10 @@ window.SVBoot = function (networkText) {
       html += cardHtml(best, true, 'Te la recomendamos', reasonsFor(best, r));
     }
 
-    const rest = r.ranked.slice(1, 5);
-    if (rest.length) html += `<section class="group"><h3 class="group-title">Otras opciones</h3>${rest.map(o => cardHtml(o, false)).join('')}</section>`;
+    // When the recommended trip is not the fastest, the fastest goes first among the others, said plainly.
+    const gain = quickest !== best && !walkWins ? best.total - quickest.total : 0;
+    const others = r.ranked.slice(1), rest = (gain >= 180 ? [quickest, ...others.filter(o => o !== quickest)] : others).slice(0, 4);
+    if (rest.length) html += `<section class="group"><h3 class="group-title">Otras opciones</h3>${rest.map(o => cardHtml(o, false, gain >= 180 && o === quickest ? `La más rápida · ${mins(gain)} min antes` : '')).join('')}</section>`;
     if (best.buses > 1 && r.hint) html += hintHtml(r.hint);
     box.innerHTML = html + fineHtml();
   }
@@ -880,7 +892,10 @@ window.SVBoot = function (networkText) {
       if (pickerCat) { renderCategory(); return; }
       const lost = target === 'from' && !state.savingFav && !!gpsProblem();
       if (lost) html += `<div class="notice" style="margin-top:.5rem">${esc(gpsProblem())}</div>`;
-      if (WEB && !state.savingFav) html += optRow('gps', lost ? 'Intentar de nuevo con mi ubicación' : 'Usar mi ubicación', '', 'id="useGps"', 'map-opt').replace('k-gps', 'k-me');
+      if (WEB && !state.savingFav) {
+        const where = state.gps ? `Ahora estás cerca de ${nearestLabel(state.gps.lat, state.gps.lon)}` : target === 'from' ? 'Sales desde donde estás ahora' : 'Vas hasta donde estás ahora';
+        html += optRow('gps', lost ? 'Intentar de nuevo con mi ubicación' : 'Usar mi ubicación', lost ? '' : where, 'id="useGps"', 'map-opt').replace('k-gps', 'k-me');
+      }
       if (!state.savingFav) {
         for (const k of ['casa', 'trabajo']) {
           const label = k === 'casa' ? 'Casa' : 'Trabajo', f = state.favs[k];
@@ -934,9 +949,10 @@ window.SVBoot = function (networkText) {
     const outsideFirst = addr || (WEB && BusGeo.canonical(query));
     const stationsFirst = outsideFirst ? [] : local.filter(p => p.kind === 'station'), others = outsideFirst ? local : local.filter(p => p.kind !== 'station');
     html += stationsFirst.map(p => rowHtml(p, add(p))).join('');
+    if (addr || Grid.looksLike(query)) html += `<div id="gridRows">${gridRows(query)}</div>`;
     html += '<div id="remoteRows"></div>';
     html += others.map(p => rowHtml(p, add(p), addr ? `Esquina cercana · ${subLabel(p)}` : undefined)).join('');
-    if (!local.length && !WEB) html += '<p class="hint">No encontramos ese nombre. Prueba con el barrio o una estación cercana, o búscalo en el mapa.</p>';
+    if (!local.length && !WEB && !Grid.hits(query).length) html += '<p class="hint addr-miss">No encontramos ese nombre. Prueba con el barrio o una estación cercana, o búscalo en el mapa.</p>';
     html += optRow('mapPick', 'Elegir en el mapa', '', 'data-open-map="1"', 'map-opt');
     $('pickerList').innerHTML = html;
     announceCount();
@@ -966,6 +982,52 @@ window.SVBoot = function (networkText) {
     BusGeo.category(cat.id).then(list => { Photon.fails = 0; if (seq === categorySeq && pickerCat === cat.id) draw(sorted(list), list.length ? '' : 'No encontramos lugares de este tipo.'); })
       .catch(() => { photonFailed(); if (seq === categorySeq && pickerCat === cat.id) draw([], 'La búsqueda no respondió. Estos son los paraderos con ese nombre.'); });
   }
+  // ---------- addresses by the street grid ----------
+  // Every corner of numbered streets in Bogotá (grid.json, from OpenStreetMap). With it "Calle 72 # 10-20" is placed by
+  // the city's own logic, on the phone and without internet, even where the map has no house numbers. The search
+  // service then only adds named places. The table is fetched the first time someone types something like an address.
+  const Grid = { data: null, loading: null, failed: false, cache: new Map() };
+  Grid.looksLike = q => /^\s*(?:\d|(?:av|ak|ac|cl|cll|ca|cr|kr|k|dg|di|tv|tr|la|au)\b|calle|carrera|diagonal|transversal|avenida|autopista)/i.test(q);
+  Grid.load = () => {
+    if (Grid.data) return Promise.resolve(Grid.data);
+    if (Grid.loading) return Grid.loading;
+    const inline = $('gridData');
+    if (inline) { Grid.data = BusGeo.gridIndex(JSON.parse(inline.textContent)); return Promise.resolve(Grid.data); }
+    Grid.loading = (fetch(`grid.json?b=${encodeURIComponent(window.SV_GRID || '')}`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }))
+      .then(d => { Grid.data = BusGeo.gridIndex(d); return Grid.data; })
+      .catch(() => { Grid.failed = true; Grid.loading = null; return null; });
+    return Grid.loading;
+  };
+  Grid.hits = q => {
+    if (!Grid.data) return [];
+    const k = q.trim().toLowerCase();
+    if (!Grid.cache.has(k)) {
+      Grid.cache.set(k, BusGeo.findAddress(Grid.data, q));
+      if (Grid.cache.size > 60) Grid.cache.delete(Grid.cache.keys().next().value);
+    }
+    return Grid.cache.get(k);
+  };
+  function gridRows(query) {
+    if (!Grid.data && $('gridData')) Grid.load();
+    if (!Grid.data) {
+      if (!Grid.failed) Grid.load().then(d => {
+        const box = $('gridRows');
+        if (!d || !box || $('pickerTitle').value.trim() !== query) return;
+        box.innerHTML = gridRows(query);
+        if (Grid.hits(query).length) document.querySelectorAll('#pickerList .addr-miss').forEach(x => x.remove());
+        announceCount();
+      });
+      return '';
+    }
+    return Grid.hits(query).map(h => {
+      const st = nearestStation(h.lat, h.lon), near = st.i >= 0 && st.m < 3000 ? `a ${distLabel(st.m)} de ${pretty(S.n[st.i])}` : 'en Bogotá';
+      // A forgotten Sur or Este is asked, not assumed; an address between corners the map lacks is called approximate.
+      const how = h.alt === 'sur' ? '¿Es al sur?' : h.alt === 'este' ? '¿Es al oriente?' : h.exact ? 'Dirección' : 'Dirección aproximada';
+      const p = { kind: 'geo', station: -1, stop: -1, name: h.label, lat: h.lat, lon: h.lon, sub: `${how} · ${near}` };
+      return rowHtml(p, picks.push(p) - 1, p.sub, 'geo');
+    }).join('');
+  }
+
   // The address search is a free public service that promises nothing. Answers are remembered, a slow answer is dropped
   // after 6 seconds, and after two failures in a row the app stops asking for 5 minutes, so riders do not wait for
   // nothing and the service is not hammered while it is down. Stations, stops and the map keep working meanwhile.
@@ -978,8 +1040,9 @@ window.SVBoot = function (networkText) {
     if (searchAbort) searchAbort.abort();
     const seq = ++searchSeq, rows = () => $('remoteRows');
     if (query.length < 3) return;
-    if (!navigator.onLine) { rows().innerHTML = '<p class="hint">Sin internet no podemos buscar direcciones. Las estaciones y los paraderos sí funcionan.</p>'; return; }
-    if (photonPaused()) { rows().innerHTML = PAUSED_HINT; return; }
+    const placed = () => Grid.hits(query).length > 0;
+    if (!navigator.onLine) { rows().innerHTML = placed() ? '' : '<p class="hint">Sin internet solo encontramos direcciones con calle y número (Calle 72 # 10-20), estaciones y paraderos.</p>'; return; }
+    if (photonPaused()) { rows().innerHTML = placed() ? '' : PAUSED_HINT; return; }
     const key = query.trim().toLowerCase();
     rows().innerHTML = '<p class="hint">Buscando direcciones y lugares…</p>';
     searchTimer = setTimeout(async () => {
@@ -993,10 +1056,13 @@ window.SVBoot = function (networkText) {
         Photon.cache.set(key, res);
         if (Photon.cache.size > 60) Photon.cache.delete(Photon.cache.keys().next().value);
         if (seq !== searchSeq || !rows()) return;
-        const list = res.results.filter(p => !res.address || p.score > 0);
-        const strong = list.some(p => p.exact);
+        let list = res.results.filter(p => !res.address || p.score > 0);
+        // When the grid already placed the address, the service adds only places with that exact number somewhere else.
+        const fromGrid = Grid.hits(query);
+        if (fromGrid.length) list = list.filter(p => p.exact && !fromGrid.some(g => dist(g.lat, g.lon, p.lat, p.lon) < 120));
+        const strong = list.some(p => p.exact) || fromGrid.length > 0;
         let h = '';
-        if (res.address && !strong) h += '<p class="hint">No encontramos esa dirección exacta. Revisa si alguna opción te sirve o elige el punto en el mapa.</p>';
+        if (res.address && !strong) h += '<p class="hint addr-miss">No encontramos esa dirección exacta. Revisa si alguna opción te sirve o elige el punto en el mapa.</p>';
         h += list.map(p => { const i = picks.push(p) - 1; return rowHtml(p, i, (res.address && !p.exact ? 'Aproximada · ' : '') + (p.sub || 'Dirección o lugar')); }).join('');
         if (!list.length && !localCount && !res.address) h += '<p class="hint">No encontramos ese nombre. Prueba con otro lugar cercano o elígelo en el mapa.</p>';
         rows().innerHTML = h;
@@ -1005,7 +1071,7 @@ window.SVBoot = function (networkText) {
         clearTimeout(limit);
         if (e.name === 'AbortError' && !timedOut) return; // the rider kept typing
         photonFailed();
-        if (seq === searchSeq && rows()) rows().innerHTML = photonPaused() ? PAUSED_HINT : '<p class="hint">La búsqueda de direcciones no respondió. Las estaciones y los paraderos siguen funcionando.</p>';
+        if (seq === searchSeq && rows()) rows().innerHTML = placed() ? '' : photonPaused() ? PAUSED_HINT : '<p class="hint">La búsqueda de direcciones no respondió. Las estaciones y los paraderos siguen funcionando.</p>';
       }
     }, 350);
   }
@@ -1023,9 +1089,32 @@ window.SVBoot = function (networkText) {
     if (target === 'from') state.fromGps = false;
     $('picker').hidden = true; $('mapSheet').hidden = true;
     remember(); persist(); render();
+    // The missing end is asked, not assumed: "Desde" offers the rider's location first, but the choice is theirs.
     if (!state.to) openPicker('to');
-    else if (!state.from && !WEB) openPicker('from');
-    else if (!state.from) useMyLocation('from');
+    else if (!state.from) openPicker('from');
+  }
+  // Going back the other way: the destination becomes the origin. Works with the rider's location on either end.
+  function swapTrip() {
+    if (!state.from && !state.to) return;
+    const a = state.from;
+    state.from = state.to; state.to = a;
+    state.fromGps = !!(state.from && state.from.kind === 'gps');
+    state.example = false;
+    remember(); persist(); render();
+    // The arrows turn and the two places trade rows (only a class: the stylesheet decides whether anything moves).
+    document.querySelectorAll('#swap, #sumSwap').forEach(b => { b.dataset.turn = b.dataset.turn === '1' ? '0' : '1'; });
+    replay(document.querySelector('.route-fields'), 'swapped'); replay(document.querySelector('.panel-sum'), 'swapped');
+    announce(state.from && state.to ? `Ahora vas de ${placeWord(state.from)} a ${placeWord(state.to)}` : 'Origen y destino invertidos');
+  }
+  const placeWord = p => (p.kind === 'gps' ? 'tu ubicación' : p.name);
+  // Plays a one-off animation again: the class comes off, the browser notices, and it goes back on.
+  function replay(el, cls) {
+    if (!el) return;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+    clearTimeout(el._replay);
+    el._replay = setTimeout(() => el.classList.remove(cls), 600);
   }
 
   // ---------- maps: a real street map on the web, the hand-drawn one as fallback ----------
@@ -1631,8 +1720,8 @@ window.SVBoot = function (networkText) {
   let shownPlate = null;
   function showFollow(title, sub, level, plateHtml, speech) {
     // Only what changed, so a screen reader does not repeat the instruction with each GPS reading.
-    if (shownPlate !== (plateHtml || '')) { shownPlate = plateHtml || ''; $('fPlate').innerHTML = shownPlate; }
-    if ($('fTitle').textContent !== title) $('fTitle').textContent = title;
+    if (shownPlate !== (plateHtml || '')) { shownPlate = plateHtml || ''; $('fPlate').innerHTML = shownPlate; replay($('fPlate'), 'changed'); }
+    if ($('fTitle').textContent !== title) { $('fTitle').textContent = title; replay($('fTitle'), 'changed'); }
     if ($('fSub').textContent !== (sub || '')) $('fSub').textContent = sub || '';
     $('followBar').dataset.level = level || '';
     if (speech) Voice.say(speech);
@@ -1774,7 +1863,7 @@ window.SVBoot = function (networkText) {
     else if (t.dataset.updateNow) location.reload();
     else if (t.dataset.updateGet && Update.latest) downloadLatest(Update.latest);
     else if (t.id === 'showExample') { state.from = pick('portal 80'); state.to = pick('portal sur'); state.mode = 'pick'; state.example = true; render(); window.scrollTo(0, 0); }
-    else if (t.id === 'sayNear' || t.id === 'fromLine') openPicker('from');
+    else if (t.id === 'sayNear') openPicker('from');
     else if (t.dataset.mode) { state.mode = t.dataset.mode; render(); }
     else if (t.dataset.pick !== undefined) choose(picks[+t.dataset.pick]);
     else if (t.dataset.setFav) openPicker(target, t.dataset.setFav);
@@ -1785,10 +1874,11 @@ window.SVBoot = function (networkText) {
     else if (t.id === 'openForm') { state.formOpen = true; renderForm(); window.scrollTo(0, 0); }
     else if (t.id === 'closeForm') { state.formOpen = false; renderForm(); window.scrollTo(0, 0); }
     else if (t.id === 'fromField') openPicker('from');
-    else if (t.id === 'toField' || t.id === 'askDest') openPicker('to');
-    else if (t.id === 'enableGps') useMyLocation('from');
+    else if (t.id === 'toField') openPicker('to');
+    // Seeing what passes nearby needs the position, but it does not make it the start of the trip.
+    else if (t.id === 'enableGps') { render(); locate().then(render); }
     else if (t.id === 'useGps') useMyLocation(target);
-    else if (t.id === 'swap') { const a = state.from; state.from = state.to; state.to = a; persist(); render(); }
+    else if (t.id === 'swap' || t.id === 'sumSwap') swapTrip();
     else if (t.id === 'pickerClose') { $('picker').hidden = true; state.savingFav = null; render(); }
     else if (t.id === 'mapClose' || t.id === 'mapNo') $('mapSheet').hidden = true;
     else if (t.id === 'mapStyle') setMapLook(!state.mapDark);
@@ -2006,7 +2096,8 @@ window.SVBoot = function (networkText) {
     navigator.permissions.query({ name: 'geolocation' }).then(p => {
       if (p.state !== 'granted') return;
       if (shared) return;
-      locate().then(g => { if (g && (!state.from && state.fromGps || state.from && state.from.kind === 'gps')) { state.from = gpsPlace(); state.fromGps = true; } render(); });
+      // The position shows what passes nearby; it becomes the start of a trip only when the rider picks it.
+      locate().then(g => { if (g && state.from && state.from.kind === 'gps') state.from = gpsPlace(); render(); });
     }).catch(() => {});
   }
   window.__sinVueltas = { state, E, FOLLOW, Planner, MAP, RM, Streets, rideLine, render, Update, checkForUpdate, Photon }; // handy when debugging on a phone

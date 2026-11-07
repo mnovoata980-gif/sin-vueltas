@@ -24,9 +24,11 @@ const FONTS = `<script>(function () {
 })();</script>`;
 const css = r('app.css'), engine = safe(r('js/engine.js')), geo = safe(r('js/geo.js')), app = safe(r('js/app.js')), data = r('data/network.json'), streets = r('data/shapes.json');
 const meta = JSON.parse(data).meta;
+// Every corner of numbered streets, to place addresses by the city's grid (tools/build-grid.js). Rebuilt by hand now and then.
+const grid = r('data/grid.json'), gridBuilt = JSON.parse(grid).meta.built;
 // The owner's own choices (name, contact, where error reports go). Empty fields stay empty: the app says so instead of inventing them.
 const config = fs.existsSync(path.join(__dirname, 'config.json')) ? JSON.parse(r('config.json')) : {};
-const CONFIG = `<script>window.SV_CONFIG = ${JSON.stringify({ owner: config.owner || '', contact: config.contact || '', reportEmail: config.reportEmail || '', reportForm: config.reportForm || '' }).replace(/</g, '\\u003c')};</script>`;
+const CONFIG = `<script>window.SV_CONFIG = ${JSON.stringify({ owner: config.owner || '', contact: config.contact || '', reportEmail: config.reportEmail || '', reportForm: config.reportForm || '' }).replace(/</g, '\\u003c')}; window.SV_GRID = '${gridBuilt}';</script>`;
 const body = r('index.src.html');
 
 const LOADER = `(function () {
@@ -74,6 +76,7 @@ const site = fill(fill(body, '<!--__HEAD__-->', webHead), '<!--__SCRIPTS__-->', 
 write('site/index.html', site);
 write('site/network.json', data);
 write('site/shapes.json', streets);
+write('site/grid.json', grid);
 write('site/manifest.webmanifest', JSON.stringify({
   name: 'Sin Vueltas', short_name: 'Sin Vueltas', description: 'Rutas de TransMilenio y SITP con el número de buses que tú decides.',
   lang: 'es', start_url: '.', scope: '.', display: 'standalone', background_color: '#1b3fcb', theme_color: '#1b3fcb',
@@ -91,6 +94,7 @@ write('site/sw.js', fill(r('sw.src.js'), '__VERSION__', shellHash.digest('hex').
 const previewHead = `<title>Sin Vueltas</title>\n<meta name="claude:viewport-fit-sides" content="cover">\n${FONTS}\n<style>${css}</style>`;
 const previewScripts = `<script type="application/json" id="network">${data.replace(/<\//g, '<\\/')}</script>
 <script type="application/json" id="shapes">${streets}</script>
+<script type="application/json" id="gridData">${grid}</script>
 <script>window.SV_TARGET = 'preview';</script>
 ${CONFIG}
 <script id="engineSrc">${engine}</script>

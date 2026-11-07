@@ -27,6 +27,33 @@ for (const [q, want] of PARSE) {
   check(`entiende «${q}»`, !!got && Object.entries(want).every(([k, v]) => got[k] === v), got ? got.text : 'sin reconocer');
 }
 for (const q of ['unicentro', 'portal suba', 'hospital san ignacio', 'calle 72', 'barrio galan']) check(`«${q}» no es una dirección`, Geo.parseAddress(q) === null);
+// How people really type addresses: abbreviations, no "#", glued letters, apartment and neighborhood at the end.
+const LABELS = [
+  ['cl72#10-20', 'Calle 72 # 10-20'], ['CALLE 72 No. 10 - 20 Apto 301, Bogotá D.C.', 'Calle 72 # 10-20'], ['calle 72 numero 10 20', 'Calle 72 # 10-20'],
+  ['Cra 7 # 45-10 Chapinero', 'Carrera 7 # 45-10'], ['Tv. 18 # 75-30 torre 2 apto 502', 'Transversal 18 # 75-30'], ['AK 15 # 100-20', 'Carrera 15 # 100-20'],
+  ['Kra 50 Bis A # 3-25 Sur', 'Carrera 50 Bis A # 3-25 Sur'], ['calle 45abis # 13-20', 'Calle 45A Bis # 13-20'], ['Dg 40 A Bis # 15-20', 'Diagonal 40A Bis # 15-20'],
+  ['Carrera 1 G E # 84A-42', 'Carrera 1G Este # 84A-42'], ['Calle 26 Sur # 10-15 Este', 'Calle 26 Sur # 10-15 Este'], ['calle 1 a bis sur 12 30', 'Calle 1A Bis Sur # 12-30'],
+  ['Av Boyacá # 64-60', 'Avenida Boyacá # 64-60'], ['Av. Primero de Mayo # 30-20', 'Avenida Primero de Mayo # 30-20'], ['Cll 100 # 19A-30 of 501', 'Calle 100 # 19A-30'],
+];
+for (const [q, want] of LABELS) { const got = Geo.parseAddress(q); check(`lee «${q}»`, !!got && got.label === want, got ? got.label : 'sin reconocer'); }
+
+// Placing addresses by the street grid, offline. Known places, checked against the map.
+const grid = require('../data/grid.json');
+const PLACED = [
+  ['Carrera 11 # 82-71', 4.6665, -74.0526, 150], ['Carrera 7 # 28-66', 4.6155, -74.0690, 150], ['Calle 72 # 10-20', 4.6565, -74.0581, 150],
+  ['Calle 38A Sur # 34D-50', 4.5925, -74.1236, 200], ['Calle 185 # 45-03', 4.7630, -74.0447, 200], ['Carrera 1 # 18A-12', 4.6015, -74.0662, 150],
+  ['la caracas con 45', 4.6326, -74.0677, 250],
+];
+for (const [q, lat, lon, tol] of PLACED) {
+  const r = Geo.findAddress(grid, q)[0], m = r ? Math.round(dist(lat, lon, r.lat, r.lon)) : null;
+  check(`ubica «${q}» con la cuadrícula`, m !== null && m < tol, r ? `${r.label} a ${m} m` : 'nada');
+}
+const both = Geo.findAddress(grid, '72 con 10').map(r => r.label);
+check('«72 con 10» ofrece calle y carrera', both.includes('Calle 72 con Carrera 10') && both.includes('Carrera 72 con Calle 10'), both.join(' | '));
+const sur = Geo.findAddress(grid, 'calle 73a 82d 65').map(r => r.label);
+check('sin «Sur» ofrece también la del sur, después', sur[0] === 'Calle 73A # 82D-65' && sur.includes('Calle 73A Sur # 82D-65'), sur.join(' | '));
+check('no inventa una dirección fuera de la ciudad', Geo.findAddress(grid, 'Calle 400 # 300-20').length === 0);
+
 const ALIAS = { 'u nacional': 'universidad nacional de colombia', 'Universidad Nacional': 'universidad nacional de colombia', 'la javeriana': 'pontificia universidad javeriana', 'el campín': 'estadio el campin', 'la terminal': 'terminal de transporte', aeropuerto: 'aeropuerto internacional el dorado', autonorte: 'autopista norte', 'la 72': 'calle 72', 'la 15': 'carrera 15', 'la séptima': 'carrera 7' };
 for (const [q, want] of Object.entries(ALIAS)) check(`alias «${q}»`, Geo.canonical(q) === want, Geo.canonical(q));
 

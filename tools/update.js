@@ -37,6 +37,7 @@ async function latestFeed() {
     run(process.execPath, ['--max-old-space-size=6000', 'build-data.js', tmp, feed.date], { cwd: __dirname });
     run(process.execPath, ['--max-old-space-size=6000', 'audit-routes.js', tmp, '--strict', '--engine'], { cwd: __dirname });
     run(process.execPath, ['test-engine.js'], { cwd: __dirname });
+    run(process.execPath, ['test-geo.js'], { cwd: __dirname });
     run(process.execPath, ['build.js'], { cwd: root });
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

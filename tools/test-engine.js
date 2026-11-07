@@ -43,7 +43,14 @@ const q = { from: ame, to: suba, day: 0, time: 8 * 3600, limit: 2, maxWalk: 600 
 const byBuses = E.recommend({ ...q, pref: 'buses' }), byTime = E.recommend({ ...q, pref: 'time' }), byWalk = E.recommend({ ...q, pref: 'walk' });
 console.log('recomienda | buses:', ride(byBuses.ranked[0]), Math.round(byBuses.ranked[0].total / 60), '| rapido:', ride(byTime.ranked[0]), Math.round(byTime.ranked[0].total / 60), '| caminar:', ride(byWalk.ranked[0]), Math.round(byWalk.ranked[0].walk / 60));
 check('recomendacion respeta el limite', [byBuses, byTime, byWalk].every(r => r.ranked.every(o => o.buses <= 2)));
-check('prioridad menos buses elige directo si existe', byBuses.ranked[0].buses === 1);
+// "Menos buses": a second bus wins only when it saves more than its change costs (6 min in a station, 8 at the stop, 12 walking).
+const COST = { station: 360, stop: 480, walk: 720 }, changeCost = o => o.legs.reduce((s, l) => s + (l.change ? COST[l.change] : 0), 0);
+const direct = byBuses.ranked.filter(o => o.buses === 1).sort((a, b) => a.total - b.total)[0], recB = byBuses.ranked[0];
+check('menos buses: otro bus solo si ahorra mas que el cambio', recB.buses === 1 || !direct || recB.total + changeCost(recB) < direct.total);
+check('cada transbordo dice como es (estacion, paradero o caminando)', byTime.ranked.every(o => o.legs.filter(l => l.type === 'ride').every((l, i) => (i === 0) === !l.change)));
+// Without a personalized card every bus is paid, so a second fare needs a bigger saving.
+const other = E.recommend({ ...q, pref: 'buses', card: 'other' }).ranked[0], plus = E.recommend({ ...q, pref: 'buses', card: 'plus' }).ranked[0];
+check('sin tarjeta personalizada no paga mas por ahorrar poco', other.fare.basic <= plus.fare.basic);
 check('prioridad rapido no es mas lenta que menos buses', byTime.ranked[0].total <= byBuses.ranked[0].total);
 check('prioridad caminar no camina mas que menos buses', byWalk.ranked[0].walk <= byBuses.ranked[0].walk);
 // Fares: built by hand so each rule is tested on its own.

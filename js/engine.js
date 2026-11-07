@@ -271,6 +271,13 @@
         wait += l.wait; ride += l.sec;
       }
       for (const l of legs) if (l.type === 'walk') { l.fromPlace = l.fromStop !== undefined ? place(l.fromStop) : null; l.toPlace = l.toStop !== undefined ? place(l.toStop) : null; }
+      // How each change of bus happens, because they are not equally hard: inside the station nobody goes out
+      // or pays again, at the same stop one just waits, and walking between stops means crossing streets.
+      rides.forEach((l, i) => {
+        if (!i) return;
+        const prev = rides[i - 1], st = l.boardPlace.station;
+        l.change = st >= 0 && st === prev.alightPlace.station ? 'station' : prev.alight === l.board ? 'stop' : 'walk';
+      });
       const option = { buses: k, legs, walk, wait, ride, total: walk + wait + ride, arrive: t0 + walk + wait + ride };
       option.fare = fareOf(option, net.meta.fare);
       return option;
@@ -352,13 +359,27 @@
     }
 
     // Ranks trips by what the rider said matters. Fewer buses is the default: that is the point of the app.
-    // "Menos buses" must mean it: another bus only wins when it saves over 30 minutes.
-    const WEIGHTS = { buses: { transfer: 1800, walk: 0.5 }, time: { transfer: 120, walk: 0 }, walk: { transfer: 300, walk: 10 } };
+    // In "Menos buses" another bus has to save more than the change costs the rider, which depends on the change:
+    // 6 minutes inside a station, 8 at the same stop, 12 walking to another stop. Until November 2026 every extra bus
+    // had to save 30 minutes; on 600 trips between real addresses that recommended a trip 5 or more minutes slower
+    // than one already found in 28 % of them (median 12 minutes lost), and riders noticed. The limit on buses stays hard.
+    const CHANGE_COST = { station: 360, stop: 480, walk: 720 };
+    const WEIGHTS = { buses: { transfer: null, walk: 0.5 }, time: { transfer: 120, walk: 0 }, walk: { transfer: 300, walk: 10 } };
+    const changesCost = (o, w) => {
+      if (w.transfer !== null) return (o.buses - 1) * w.transfer;
+      let s = 0;
+      for (const l of o.legs) if (l.type === 'ride' && l.change) s += CHANGE_COST[l.change] || CHANGE_COST.walk;
+      return s;
+    };
     // From 9 p.m. to 5 a.m. walking and standing at a stop weigh more: the press names the night as the worst time for phone theft.
     const isNight = t => { const h = ((t % 86400) + 86400) % 86400 / 3600; return h >= 21 || h < 5; };
-    function score(o, pref, night) {
+    // Someone whose card is not personalized pays every bus. Then a trip that costs another fare counts 15 minutes
+    // slower per fare, so a few minutes saved never doubles their fare without a reason.
+    const FARE_AS_SEC = 900;
+    function score(o, pref, night, money) {
       const w = WEIGHTS[pref] || WEIGHTS.buses;
-      let s = o.total + (o.buses - 1) * w.transfer + o.walk * w.walk;
+      let s = o.total + changesCost(o, w) + o.walk * w.walk;
+      if (money && money.card === 'other' && o.fare) s += Math.max(0, o.fare.basic - money.cheapest) / money.price * FARE_AS_SEC;
       if (night) s += o.walk + o.wait * 0.5;
       for (const l of o.legs) if (l.type === 'ride') {
         if (l.hwAll > 1200) s += (l.hwAll - 1200) / 2; // rare buses are risky even if the estimate looks fine
@@ -366,6 +387,7 @@
       }
       return s;
     }
+    const moneyOf = (q, opts) => ({ card: q.card, price: net.meta.fare || FARE_RULES.price, cheapest: Math.min(...opts.map(o => (o.fare ? o.fare.basic : Infinity))) });
     function recommend(q) {
       const limit = q.limit, maxWalk = q.maxWalk, pref = q.pref || 'buses';
       const base = plan({ ...q, maxBuses: Math.min(3, limit + 1) });
@@ -373,8 +395,8 @@
       base.groups.filter(g => g.buses <= limit).forEach(g => g.options.forEach(add));
       // Offer shorter walks too, since the fastest trip at the rider's limit often uses all of it.
       if (maxWalk > 300) plan({ ...q, maxBuses: limit, maxWalk: 300 }).groups.forEach(g => g.options.forEach(add));
-      const night = isNight(q.time);
-      const ranked = [...seen.values()].sort((a, b) => score(a, pref, night) - score(b, pref, night));
+      const night = isNight(q.time), all = [...seen.values()], money = moneyOf(q, all);
+      const ranked = all.sort((a, b) => score(a, pref, night, money) - score(b, pref, night, money));
       return { ...base, ranked, night, fastest: ranked.length ? ranked.reduce((a, b) => (b.total < a.total ? b : a)) : null };
     }
 
@@ -386,11 +408,11 @@
     function arriveBy(q) {
       const target = q.arriveBy, pref = q.pref || 'buses';
       const quickBest = t => {
+        const opts = [];
+        for (let k = 1; k <= q.limit; k++) { const o = exact(q.from, q.to, q.day, t, k, q.maxWalk); if (o) opts.push(o); }
+        const money = moneyOf(q, opts);
         let best = null, low = Infinity;
-        for (let k = 1; k <= q.limit; k++) {
-          const o = exact(q.from, q.to, q.day, t, k, q.maxWalk);
-          if (o && score(o, pref, isNight(target)) < low) { low = score(o, pref, isNight(target)); best = o; }
-        }
+        for (const o of opts) { const s = score(o, pref, isNight(target), money); if (s < low) { low = s; best = o; } }
         return best;
       };
       let t = Math.max(0, target - 3600), found = null;

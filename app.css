@@ -85,19 +85,15 @@ h1, h2, h3, p { margin: 0; }
 .change { color: var(--sign); font-weight: 700; flex: none; font-size: var(--small); }
 #closeForm { display: none; }
 
-/* First step: only the destination. The other options appear once there is a trip to adjust. */
-.panel-first { display: none; }
-.panel.is-first { gap: .75rem; }
-.panel.is-first .panel-first { display: grid; grid-template-columns: minmax(0, 1fr); gap: .625rem; }
-.panel.is-first .route-fields, .panel.is-first .opts, .panel.is-first .recent { display: none; }
-.dest { width: 100%; min-height: 3.75rem; display: flex; align-items: center; gap: .625rem; padding: .375rem .875rem; border: 0; border-radius: 1.125rem; background: var(--surface); color: var(--ink); text-align: left; font-weight: 600; font-size: 1.0625rem; box-shadow: 0 4px 0 var(--top-deep); transition: transform .06s ease; }
-.dest:active { transform: translateY(2px); box-shadow: 0 2px 0 var(--top-deep); }
-.dest .to-pin { color: var(--red); width: 1.625rem; height: 1.625rem; flex: none; }
-.dest .empty { color: var(--muted); font-weight: 500; }
+/* First step: where from and where to, nothing assumed. The other options appear once there is a trip to adjust. */
+.panel.is-first .opts, .panel.is-first .recent { display: none; }
 .quick { display: flex; flex-wrap: wrap; gap: .375rem; }
 .quick .chip { display: inline-flex; align-items: center; gap: .3125rem; max-width: 100%; }
 .quick .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.from-line { width: 100%; min-height: var(--tap); padding: 0; background: none; border: 0; color: var(--on-top); display: flex; align-items: center; justify-content: space-between; gap: .75rem; text-align: left; font-size: var(--small); }
+.swap[aria-disabled="true"] { opacity: .35; }
+/* The trip summary keeps a way to go back the other way without opening the form. */
+.panel-sum .sum { flex: 1; min-width: 0; }
+.sum-swap { flex: none; background: rgba(255, 255, 255, .16); color: var(--on-top); }
 .panel.is-first .limit-ctl { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .75rem; }
 .panel.is-first .limit { grid-template-columns: repeat(3, 3rem); }
 .panel.is-first .limit button { min-height: var(--tap); font-size: 1.25rem; }
@@ -162,6 +158,7 @@ h1, h2, h3, p { margin: 0; }
 .card > summary::-webkit-details-marker { display: none; }
 .card-main { padding: .875rem .875rem .75rem; display: grid; gap: .5rem; }
 /* A sticker that sits on the edge of the card, so the recommended option is obvious at a glance. */
+.mini-tag { display: inline-block; margin-bottom: .375rem; background: var(--green); color: #ffffff; font: 700 var(--small)/1.2 var(--font); padding: .25rem .5rem; border-radius: .4rem; }
 .tagline { justify-self: start; margin-top: -1.5rem; background: var(--sign); color: var(--on-sign); font: 700 var(--small)/1 var(--font); padding: .375rem .625rem; border-radius: .5rem; box-shadow: 0 2px 0 var(--sign-edge); transform: rotate(-1.5deg); }
 .card.has-tag { margin-top: .5rem; }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: .125rem .625rem; flex-wrap: wrap; }
@@ -320,7 +317,7 @@ h1, h2, h3, p { margin: 0; }
 /* On the phone, the form folds once there is a trip so the recommendation fits on the first screen. */
 @media (max-width: 899px) {
   .panel.is-collapsed .panel-full { display: none; }
-  .panel.is-collapsed .panel-sum { display: block; }
+  .panel.is-collapsed .panel-sum { display: flex; align-items: center; gap: .5rem; }
   .panel.has-trip:not(.is-collapsed) #closeForm { display: flex; }
   body.trip-view .top { padding-block: .5rem .625rem; gap: .25rem; border-radius: 0 0 1.125rem 1.125rem; }
   body.trip-view .hills, body.trip-view .ask { display: none; }
@@ -336,7 +333,60 @@ h1, h2, h3, p { margin: 0; }
   .results { padding: 1.5rem 2rem 3rem; max-width: 50rem; }
   .ask { font-size: 2.25rem; }
 }
-@media (prefers-reduced-motion: reduce) { .btn, .limit button, .cat, .dest { transition: none; } .tagline { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .btn, .limit button, .cat { transition: none; } .tagline { transform: none; } }
+
+/* Motion. Short, and only position and opacity, which the phone draws without recomputing the page.
+   None of it runs for someone who asked their phone for less motion, nor in light mode (rule below). */
+.calc-card { background: var(--surface); border-radius: 1.125rem; box-shadow: var(--shadow); padding: .875rem; display: grid; gap: .625rem; overflow: hidden; position: relative; }
+.calc-card i { display: block; height: .875rem; border-radius: .4rem; background: var(--sunk); }
+.calc-card i:nth-child(1) { width: 38%; height: 1.75rem; }
+.calc-card i:nth-child(2) { width: 100%; height: 2.25rem; }
+.calc-card i:nth-child(3) { width: 72%; }
+@media (prefers-reduced-motion: no-preference) {
+  :root { --ease-out: cubic-bezier(.2, .8, .2, 1); }
+  @keyframes sv-rise { from { opacity: 0; transform: translateY(10px); } }
+  @keyframes sv-fade { from { opacity: 0; } }
+  @keyframes sv-sheet { from { opacity: 0; transform: translateY(24px); } }
+  @keyframes sv-drive { from { opacity: 0; transform: translateX(-14px); } }
+  @keyframes sv-stamp { from { opacity: 0; transform: rotate(-6deg) scale(1.25); } }
+  @keyframes sv-pop { 40% { transform: translateY(-3px) scale(1.06); } }
+  @keyframes sv-shine { to { transform: translateX(100%); } }
+  @keyframes sv-down { from { opacity: 0; transform: translateY(-60%); } }
+  @keyframes sv-up { from { opacity: 0; transform: translateY(60%); } }
+  /* Results arrive one after another, top first. */
+  .results > * { animation: sv-rise .32s var(--ease-out) both; }
+  .results > :nth-child(2) { animation-delay: .05s; }
+  .results > :nth-child(3) { animation-delay: .1s; }
+  .results > :nth-child(4) { animation-delay: .15s; }
+  .results > :nth-child(n+5) { animation-delay: .2s; }
+  .group > .card { animation: sv-rise .3s var(--ease-out) both; }
+  .group > .card:nth-of-type(2) { animation-delay: .06s; }
+  .group > .card:nth-of-type(n+3) { animation-delay: .12s; }
+  /* The bus in the answer drives in; the recommendation gets stamped. */
+  .verdict h2 .plate { display: inline-block; animation: sv-drive .42s .08s var(--ease-out) both; }
+  .verdict h2 .plate + .plate, .verdict h2 .plate:nth-of-type(2) { animation-delay: .2s; }
+  .tagline { animation: sv-stamp .3s .22s var(--ease-out) both; }
+  /* Screens that open over the app slide up a little instead of appearing at once. */
+  .sheet:not([hidden]) { animation: sv-sheet .24s var(--ease-out); }
+  .sheet .sheet-head { animation: sv-fade .2s ease-out; }
+  .panel.is-collapsed .panel-sum, .quick:not([hidden]) { animation: sv-fade .25s ease-out; }
+  /* A choice that was just made answers back. */
+  .limit button[aria-pressed="true"] { animation: sv-pop .28s var(--ease-out); }
+  .chip { transition: background-color .15s ease, color .15s ease, box-shadow .15s ease; }
+  .card[open] > .steps, .card[open] > .card-actions, .near[open] > .near-routes { animation: sv-rise .25s var(--ease-out); }
+  /* Inverting the trip: the arrows turn and the two places trade rows. */
+  .swap svg { transition: transform .35s var(--ease-out); }
+  .swap[data-turn="1"] svg { transform: rotate(180deg); }
+  .route-fields.swapped #fromField span { animation: sv-up .3s var(--ease-out); }
+  .route-fields.swapped #toField span { animation: sv-down .3s var(--ease-out); }
+  .panel-sum.swapped .sum-text { animation: sv-rise .3s var(--ease-out); }
+  /* While the route is being worked out, a quiet shine instead of a frozen screen. */
+  .calc-card::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .45) 50%, transparent 70%); transform: translateX(-100%); animation: sv-shine 1.1s ease-in-out infinite; }
+  /* A new instruction in trip mode comes in, so the eye notices it changed. */
+  #fTitle.changed, #fPlate.changed { animation: sv-rise .3s var(--ease-out); }
+}
+@media (prefers-reduced-motion: no-preference) and (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .calc-card::after { background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .08) 50%, transparent 70%); } }
+@media (prefers-reduced-motion: no-preference) { :root[data-theme="dark"] .calc-card::after { background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .08) 50%, transparent 70%); } }
 
 /* Light mode: system font, no shadows or animations. Thin borders keep the cards apart. */
 html:root[data-lite] { --font: "Segoe UI", Roboto, Helvetica, Arial, sans-serif; --shadow: none; }

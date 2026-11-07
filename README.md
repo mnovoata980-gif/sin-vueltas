@@ -18,13 +18,21 @@ node tools/update.js
 
 Baja el archivo más reciente de TransMilenio, lo empaqueta (`tools/build-data.js`), lo audita ruta por ruta (`tools/audit-routes.js`), corre las pruebas (`tools/test-engine.js`) y construye la app (`build.js`). Si algo falla, la app conserva las rutas anteriores. Toma poco más de un minuto.
 
+## Actualizar las esquinas (direcciones)
+
+```bash
+node tools/build-grid.js
+```
+
+Baja de OpenStreetMap las calles con nomenclatura de Bogotá y guarda en `data/grid.json` cada esquina de una calle (o diagonal) con una carrera (o transversal). Con esa tabla la app ubica «Calle 72 # 10-20» por la lógica de la ciudad, en el teléfono y sin internet. Descarta las esquinas que no cuadran con sus vecinas (calles a las que en el mapa les falta el «Sur»). Las calles cambian poco: basta correrlo cada pocos meses.
+
 ## Estructura
 
 - `js/engine.js`: calcula los viajes con el límite de buses, los precios y los transbordos.
 - `js/geo.js`: direcciones de Bogotá y búsqueda de lugares.
 - `js/app.js`: la interfaz.
 - `app.css`, `index.src.html`: diseño y página.
-- `data/network.json`: rutas empaquetadas. `data/shapes.json`: el trazado por calles.
+- `data/network.json`: rutas empaquetadas. `data/shapes.json`: el trazado por calles. `data/grid.json`: las esquinas para ubicar direcciones.
 - `config.json`: responsable, contacto y a dónde llegan los reportes de error.
 - `docs/`: cómo publicar, qué pasa si fallan los servicios gratuitos, y la carta a TransMilenio sobre el uso de los datos.
 
