@@ -410,10 +410,14 @@ html[data-lite] .card, html[data-lite] .enable, html[data-lite] .near { border: 
 :root { --dir-1: #2a78d6; --dir-2: #eb6834; --dir-3: #1baf7a; --dir-4: #eda100; --dir-5: #e87ba4; --dir-6: #008300; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --dir-1: #3987e5; --dir-2: #d95926; --dir-3: #199e70; --dir-4: #c98500; --dir-5: #d55181; --dir-6: #008300; } }
 :root[data-theme="dark"] { --dir-1: #3987e5; --dir-2: #d95926; --dir-3: #199e70; --dir-4: #c98500; --dir-5: #d55181; --dir-6: #008300; }
-.dir-title { display: flex; align-items: center; gap: .5rem; }
+.dir-title { display: flex; flex-wrap: nowrap; align-items: center; gap: .5rem; }
+.dir-title span { min-width: 0; }
 .dir-swatch { flex: none; width: 1.5rem; height: .375rem; border-radius: .1875rem; background: var(--dir, var(--link)); }
 .route-card { box-shadow: inset .375rem 0 0 var(--dir, transparent), var(--shadow); }
 .stops-line li::before { background: var(--dir, var(--line)); opacity: .55; }
 .map-legend { list-style: none; margin: 0; display: flex; flex-wrap: wrap; gap: .25rem 1rem; background: var(--surface); padding-block: .5rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-height: 6.5rem; overflow-y: auto; font-size: var(--small); font-weight: 600; border-top: 1px solid var(--line); }
 .map-legend li { display: flex; align-items: center; gap: .5rem; min-height: 2rem; }
 .map-legend svg { width: 1.75rem; height: .75rem; flex: none; }
+/* Two routes with the same code (a trunk 7 and a zonal 7) */
+.twin { margin: .5rem 0 0; padding: .5rem .75rem; border-radius: .75rem; background: var(--sunk); font-size: var(--small); }
+.twin .linkish { display: inline; min-height: 0; margin-left: .25rem; }

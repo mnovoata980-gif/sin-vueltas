@@ -522,7 +522,7 @@ window.SVBoot = function (networkText) {
         ${n.routes.length > 6 ? `<details class="more-routes"><summary>Ver las otras ${n.routes.length - 6} rutas</summary><ul class="near-routes">${n.routes.slice(6).map(nearRow).join('')}</ul></details>` : ''}
       </details>`).join('')}</section>`;
   }
-  const nearRow = x => `<li><button type="button" class="near-route" data-route-code="${esc(x.code)}">${plate(x.code, x.color, x.text, true)}<span>hacia ${esc(pretty(x.dest))}</span><small>cada ~${mins(x.hw)} min</small></button></li>`;
+  const nearRow = x => `<li><button type="button" class="near-route" data-route-code="${esc(routeKey(x.code, x.agency))}">${plate(x.code, x.color, x.text, true)}<span>hacia ${esc(pretty(x.dest))}</span><small>cada ~${mins(x.hw)} min</small></button></li>`;
   function homeHtml() {
     const problem = gpsProblem();
     let html = '';
@@ -671,13 +671,19 @@ window.SVBoot = function (networkText) {
     for (let k = from + 1; k < to; k++) { const m = dist(E.lat[a], E.lon[a], E.lat[s[k]], E.lon[s[k]]); if (m > far) { far = m; turn = k; } }
     return far > 1500 && turn - from >= 2 && to - turn >= 2 ? turn : -1;
   }
-  function routeVariants(code) {
+  // A route is its code plus its type: four codes (3, 7, C15 and C25) belong to a trunk route and to a zonal route at once.
+  const routeKey = (code, svc) => `${code}~${svc}`;
+  const parseRoute = key => { const k = String(key), i = k.lastIndexOf('~'); return i < 0 ? { code: k, svc: 0 } : { code: k.slice(0, i), svc: +k.slice(i + 1) }; };
+  const codeTypes = (() => { const m = new Map(); E.P.forEach(p => [p.code, ...(p.signs || []).map(x => x[1])].forEach(c => (m.get(c) || m.set(c, new Set()).get(c)).add(E.routes[p.route][4]))); return m; })();
+  const typeWord = svc => (SVC[svc] || 'bus').toLowerCase();
+  function routeVariants(code, svc) {
     const day = currentQuery().day, byDest = new Map();
     const keep = v => {
       const old = byDest.get(v.dest);
       if (!old || v.trips > old.trips || (v.trips === old.trips && v.to - v.from > old.to - old.from)) byDest.set(v.dest, v);
     };
     E.P.forEach((p, pat) => {
+      if (svc && E.routes[p.route][4] !== svc) return;
       const signs = [[0, p.code, p.dest], ...(p.signs || [])];
       signs.forEach(([from, c, dest], k) => {
         if (c !== code) return;
@@ -699,10 +705,10 @@ window.SVBoot = function (networkText) {
   const dirTitle = v => (v.part === 'ida' ? 'Ida · hacia ' : v.part === 'regreso' ? 'Regreso · hacia ' : 'Hacia ') + pretty(v.dest);
   function routeLeg(v, dir) {
     const p = E.P[v.pat], r = E.routes[p.route];
-    return { type: 'ride', pat: v.pat, bPos: v.from, aPos: v.to, board: p.stops[v.from], alight: p.stops[v.to], code: state.routeView, dest: v.dest, dir, dirTitle: dirTitle(v), color: '#' + r[2], text: '#' + r[3], boardPlace: E.place(p.stops[v.from]), alightPlace: E.place(p.stops[v.to]) };
+    return { type: 'ride', pat: v.pat, bPos: v.from, aPos: v.to, board: p.stops[v.from], alight: p.stops[v.to], code: parseRoute(state.routeView).code, dest: v.dest, dir, dirTitle: dirTitle(v), color: '#' + r[2], text: '#' + r[3], boardPlace: E.place(p.stops[v.from]), alightPlace: E.place(p.stops[v.to]) };
   }
-  function routeHtml(code) {
-    const vs = routeVariants(code), q = currentQuery(), h = Math.floor(q.time / 3600);
+  function routeHtml(key) {
+    const { code, svc } = parseRoute(key), vs = routeVariants(code, svc), q = currentQuery(), h = Math.floor(q.time / 3600);
     if (!vs.length) return `<div class="verdict"><h2>No encontramos la ruta ${esc(code)}</h2></div>`;
     const p0 = E.P[vs[0].pat], r0 = E.routes[p0.route];
     const cards = vs.map((v, i) => {
@@ -714,7 +720,7 @@ window.SVBoot = function (networkText) {
       // Each stop is a button: it lists the other routes that stop there, so a rider can plan a transfer by hand.
       const rows = stops.map((s, k) => `<li class="${S.p[s] >= 0 ? 'is-station' : 'is-stop'}"><button type="button" class="stop-link" data-stop-at="${s}">${esc(names[k])}</button></li>`).join('');
       return `<article class="card route-card" style="--dir:var(--dir-${(i % DIR_COUNT) + 1})"><div class="card-main">
-        <h3 class="group-title dir-title"><i class="dir-swatch" aria-hidden="true"></i>${esc(dirTitle(v))}</h3>
+        <h3 class="group-title dir-title"><i class="dir-swatch" aria-hidden="true"></i><span>${esc(dirTitle(v))}</span></h3>
         <p class="meta">${stops.length} paradas · ${runMin} min de punta a punta · de ${esc(names[0])} a ${esc(names[names.length - 1])}</p>
         ${service}
         <div class="card-actions route-actions"><button type="button" class="btn" data-route-map="${i}">${icon('map')}Ver en el mapa</button></div>
@@ -724,8 +730,11 @@ window.SVBoot = function (networkText) {
       </div></article>`;
     }).join('');
     const back = state.routeFrom === 'routes' ? 'Volver a las rutas' : 'Volver';
+    // The other route that wears the same code, one tap away, so nobody takes the trunk 7 for the zonal 7.
+    const twins = svc ? [...(codeTypes.get(code) || [])].filter(t => t !== svc) : [];
+    const twin = twins.map(t => `<p class="twin">Ojo: también hay una ruta ${esc(typeWord(t))} con el código ${esc(code)}, con otro recorrido. <button type="button" class="linkish" data-route-code="${esc(routeKey(code, t))}">Ver la ${esc(typeWord(t))} ${esc(code)}</button></p>`).join('');
     const loop = vs.some(v => v.part) ? ' Sale y vuelve al mismo lugar: la ida y el regreso tienen colores distintos.' : vs.length > 1 ? ' Cada sentido tiene su color, también en el mapa.' : '';
-    return `<div class="verdict"><h2>Ruta ${plate(code, '#' + r0[2], '#' + r0[3])}</h2><p>${esc(SVC[r0[4]] || 'Bus')} · ${vs.length === 1 ? '1 sentido' : `${vs.length} sentidos`}.${loop} Horarios programados del ${dayLabel(net.meta.feed)}.</p><button type="button" class="linkish" data-route-close="1">${back}</button></div>${cards}${fineHtml()}`;
+    return `<div class="verdict"><h2>Ruta ${plate(code, '#' + r0[2], '#' + r0[3])}</h2><p>${esc(SVC[r0[4]] || 'Bus')} · ${vs.length === 1 ? '1 sentido' : `${vs.length} sentidos`}.${loop} Horarios programados del ${dayLabel(net.meta.feed)}.</p>${twin}<button type="button" class="linkish" data-route-close="1">${back}</button></div>${cards}${fineHtml()}`;
   }
 
   // ---------- «Rutas»: every route, searchable by code, destination or station ----------
@@ -734,23 +743,24 @@ window.SVBoot = function (networkText) {
   const kindOf = svc => svc === 1 ? 'troncal' : svc === 2 ? 'alimentador' : svc === 3 ? 'zonal' : 'otras';
   const codeKey = c => String(c).toUpperCase().replace(/[\s-]+/g, '');
   const byCodeOrder = (a, b) => a.code.localeCompare(b.code, 'es', { numeric: true });
-  let routeIndex = null, routeByCode = null;
+  let routeIndex = null, routeById = null;
   function getRouteIndex() {
     if (routeIndex) return routeIndex;
     const found = new Map(), day = currentQuery().day;
     E.P.forEach(p => {
       const r = E.routes[p.route], trips = p.cnt[day].reduce((a, b) => a + b, 0);
       for (const [, code, dest] of [[0, p.code, p.dest], ...(p.signs || [])]) {
-        let e = found.get(code);
-        if (!e) found.set(code, e = { code, key: codeKey(code), color: '#' + r[2], text: '#' + r[3], svc: r[4], dests: new Map() });
+        const id = routeKey(code, r[4]);
+        let e = found.get(id);
+        if (!e) found.set(id, e = { id, code, key: codeKey(code), color: '#' + r[2], text: '#' + r[3], svc: r[4], dests: new Map() });
         e.dests.set(dest, (e.dests.get(dest) || 0) + trips + 1);
       }
     });
     routeIndex = [...found.values()].map(e => {
       const dests = [...new Set([...e.dests].sort((a, b) => b[1] - a[1]).map(x => pretty(x[0])))];
-      return { code: e.code, key: e.key, color: e.color, text: e.text, svc: e.svc, dests, destKey: norm(dests.join(' ')) };
-    }).sort(byCodeOrder);
-    routeByCode = new Map(routeIndex.map(e => [e.code, e]));
+      return { id: e.id, code: e.code, key: e.key, color: e.color, text: e.text, svc: e.svc, twin: codeTypes.get(e.code).size > 1, dests, destKey: norm(dests.join(' ')) };
+    }).sort((a, b) => byCodeOrder(a, b) || a.svc - b.svc);
+    routeById = new Map(routeIndex.map(e => [e.id, e]));
     return routeIndex;
   }
   // The codes that stop at any of these stops, read from the sign the bus shows at that point.
@@ -763,10 +773,10 @@ window.SVBoot = function (networkText) {
         const p = E.P[at[k]], pos = at[k + 1];
         let code = p.code;
         if (p.signs) for (const [from, c] of p.signs) if (pos >= from) code = c;
-        codes.add(code);
+        codes.add(routeKey(code, E.routes[p.route][4]));
       }
     }
-    return [...codes].map(c => routeByCode.get(c)).filter(Boolean).sort(byCodeOrder);
+    return [...codes].map(id => routeById.get(id)).filter(Boolean).sort((a, b) => byCodeOrder(a, b) || a.svc - b.svc);
   }
   // A station is all its platforms; a street stop is every stop with that name close by (both sides of the street).
   function stopsOfPlace(p) {
@@ -783,7 +793,7 @@ window.SVBoot = function (networkText) {
   }
   const routesUi = { q: '', kind: 'todas', shown: 40, at: null };
   const destLine = e => !e.dests.length ? 'Sin destino en el archivo' : 'Hacia ' + e.dests.slice(0, 2).join(' · ') + (e.dests.length > 2 ? ` y ${e.dests.length - 2} más` : '');
-  const routeRow = e => `<button type="button" class="opt route-row" data-route-code="${esc(e.code)}"><span class="route-plate">${plate(e.code, e.color, e.text)}</span><span class="opt-t"><b>${esc(destLine(e))}</b><small>${esc(SVC[e.svc] || 'Bus')}</small></span></button>`;
+  const routeRow = e => `<button type="button" class="opt route-row" data-route-code="${esc(e.id)}"><span class="route-plate">${plate(e.code, e.color, e.text)}</span><span class="opt-t"><b>${esc(destLine(e))}</b><small>${esc(SVC[e.svc] || 'Bus')}${e.twin ? ' · hay otra ruta con este código' : ''}</small></span></button>`;
   const inKind = e => routesUi.kind === 'todas' || kindOf(e.svc) === routesUi.kind;
   function placeBlock(title, sub, list, closed) {
     const rows = list.filter(inKind);
@@ -808,14 +818,14 @@ window.SVBoot = function (networkText) {
     } else {
       const key = codeKey(q), words = norm(q);
       const byCode = key ? all.filter(e => inKind(e) && e.key.startsWith(key)).sort((a, b) => (b.key === key) - (a.key === key) || byCodeOrder(a, b)) : [];
-      const listed = new Set(byCode.map(e => e.code));
+      const listed = new Set(byCode.map(e => e.id));
       if (byCode.length) html += `<h3 class="list-title">Con ese código <small>${byCode.length}</small></h3>` + byCode.slice(0, 40).map(routeRow).join('');
       // Stations and stops with that name: the routes that stop there.
       // Codes have no real words (B28, 8-1, TC12), so places and destinations are only searched for words like «calle» or «suba».
       if (/[a-zñ]{3,}/.test(words)) {
         const seen = new Set(), placesFound = searchPlaces(q, 8).filter(p => p.kind === 'station' || p.kind === 'stop').filter(p => { const k = p.kind + norm(p.name); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 2);
         for (const p of placesFound) html += placeBlock(p.name, p.kind === 'station' ? 'Estación de TransMilenio' : 'Paradero', routesAt(stopsOfPlace(p)), p.noService ? subLabel(p) : '');
-        const byDest = all.filter(e => inKind(e) && !listed.has(e.code) && e.destKey.includes(words));
+        const byDest = all.filter(e => inKind(e) && !listed.has(e.id) && e.destKey.includes(words));
         if (byDest.length) html += `<h3 class="list-title">Van hacia «${esc(q)}» <small>${byDest.length}</small></h3>` + byDest.slice(0, 40).map(routeRow).join('') + (byDest.length > 40 ? '<p class="hint">Hay más. Escribe un poco más para afinar.</p>' : '');
       }
       if (!html) html = `<p class="hint">No encontramos rutas con «${esc(q)}». Revisa el código como aparece en el bus, o escribe una estación o un barrio.</p>`;
@@ -876,8 +886,11 @@ window.SVBoot = function (networkText) {
       return;
     }
     for (const code of routeCodesFor(query)) {
-      const vs = routeVariants(code);
-      if (vs.length) html += optRow('route', `Ruta ${code}`, `Ver su recorrido · hacia ${vs.slice(0, 2).map(v => pretty(v.dest)).join(' y ')}`, `data-route-code="${esc(code)}"`, 'map-opt');
+      const types = [...(codeTypes.get(code) || [])];
+      for (const t of types) {
+        const vs = routeVariants(code, t);
+        if (vs.length) html += optRow('route', `Ruta ${code}${types.length > 1 ? ` · ${SVC[t] || 'Bus'}` : ''}`, `Ver su recorrido · hacia ${vs.slice(0, 2).map(v => pretty(v.dest)).join(' y ')}`, `data-route-code="${esc(routeKey(code, t))}"`, 'map-opt');
+      }
     }
     // A link from Google Maps or WhatsApp, or plain coordinates.
     const linked = linkCoords(query);
@@ -1717,7 +1730,7 @@ window.SVBoot = function (networkText) {
     else if (t.id === 'helpClose') $('helpSheet').hidden = true;
     else if (t.id === 'installNow' && deferredInstall) { deferredInstall.prompt(); deferredInstall.userChoice.finally(() => { deferredInstall = null; openHelp(); }); }
     else if (t.dataset.share !== undefined) shareTrip(lastOptions[+t.dataset.share]);
-    else if (t.dataset.routeCode) { state.routeFrom = t.closest('#routesSheet') ? 'routes' : null; state.routeView = t.dataset.routeCode; $('picker').hidden = true; $('routesSheet').hidden = true; state.formOpen = false; render(); window.scrollTo(0, 0); }
+    else if (t.dataset.routeCode) { state.routeFrom = t.closest('#routesSheet') ? 'routes' : t.closest('.twin') ? state.routeFrom : null; state.routeView = t.dataset.routeCode; $('picker').hidden = true; $('routesSheet').hidden = true; state.formOpen = false; render(); window.scrollTo(0, 0); }
     else if (t.dataset.routeClose) { const back = state.routeFrom === 'routes'; state.routeView = null; state.routeFrom = null; render(); window.scrollTo(0, 0); if (back) $('routesSheet').hidden = false; }
     else if (t.dataset.openRoutes) openRoutes();
     else if (t.id === 'routesClose') $('routesSheet').hidden = true;
@@ -1725,7 +1738,7 @@ window.SVBoot = function (networkText) {
     else if (t.dataset.routesMore) { routesUi.shown += 40; renderRoutes(); }
     else if (t.dataset.routesAll) { routesUi.at = null; renderRoutes(); $('routesList').scrollTop = 0; }
     else if (t.dataset.stopAt !== undefined) openRoutes(stopAtPlace(+t.dataset.stopAt));
-    else if (t.dataset.routeMap !== undefined) { const i = +t.dataset.routeMap, legs = routeVariants(state.routeView).map((v, k) => routeLeg(v, k)); openMap('view', { routeView: true, focus: i, legs: [...legs.filter(l => l.dir !== i), legs[i]] }); }
+    else if (t.dataset.routeMap !== undefined) { const i = +t.dataset.routeMap, { code, svc } = parseRoute(state.routeView), legs = routeVariants(code, svc).map((v, k) => routeLeg(v, k)); openMap('view', { routeView: true, focus: i, legs: [...legs.filter(l => l.dir !== i), legs[i]] }); }
     else if (t.id === 'legalClose') $('legalSheet').hidden = true;
     else if (t.id === 'forgetBtn') forgetMe(t);
     else if (t.dataset.report !== undefined) openReport(lastOptions[+t.dataset.report]);
