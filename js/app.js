@@ -221,12 +221,12 @@ window.SVBoot = function (networkText) {
   // ---------- state ----------
   const SAVE = 'sinvueltas.v2', saved = store.get(SAVE, null);
   const pick = q => plain(places.find(p => p.kind === 'station' && norm(p.name).startsWith(q)));
-  // Coming back hours later usually means a new trip, so the app asks again. The last destinations stay one tap away.
-  const FRESH_MS = 3 * 3600000, fresh = !!saved && Date.now() - (saved.at || 0) < FRESH_MS;
+  // Every time the app opens it starts on a clean search, leaving from the rider's location: it does not guess the
+  // next trip from the last one. Past trips and places stay saved and appear when the rider searches.
   const state = {
-    from: saved ? rehydrate(saved.from) : null,
-    to: fresh ? rehydrate(saved.to) : null,
-    fromGps: saved ? !!saved.fromGps : WEB,
+    from: null,
+    to: null,
+    fromGps: WEB,
     limit: saved && saved.limit || 2, walk: saved && saved.walk || 10, pref: saved && saved.pref || 'buses',
     card: saved && saved.card || 'unknown', voice: !(saved && saved.voice === false),
     lite: saved && saved.lite || 'auto', glance: !(saved && saved.glance === false), mapDark: !!(saved && saved.mapDark),
@@ -240,7 +240,7 @@ window.SVBoot = function (networkText) {
   const persist = () => {
     if (state.example) return;
     const slim = p => (p && p.kind !== 'gps' ? plain(p) : null);
-    store.set(SAVE, { at: Date.now(), from: slim(state.from), to: slim(state.to), fromGps: state.from ? state.from.kind === 'gps' : state.fromGps, limit: state.limit, walk: state.walk, pref: state.pref, card: state.card, voice: state.voice, lite: state.lite, glance: state.glance, mapDark: state.mapDark,
+    store.set(SAVE, { at: Date.now(), limit: state.limit, walk: state.walk, pref: state.pref, card: state.card, voice: state.voice, lite: state.lite, glance: state.glance, mapDark: state.mapDark,
       lastTo: state.lastTo.map(plain), recent: state.recent.map(r => ({ key: r.key, from: plain(r.from), to: plain(r.to) })), favs: { casa: slim(state.favs.casa), trabajo: slim(state.favs.trabajo) } });
   };
   // Light mode: the head script reads the phone's signals, and the rider can override them from the footer.
@@ -331,9 +331,8 @@ window.SVBoot = function (networkText) {
       $('fromText').textContent = fromLine();
       const chips = [];
       if (!state.to) {
-        const hour = Math.floor(bogotaNow().sec / 3600), order = hour < 12 ? ['trabajo', 'casa'] : ['casa', 'trabajo'];
-        for (const k of order) if (state.favs[k]) chips.push(`<button type="button" class="chip" data-go-fav="${k}">${icon(k === 'casa' ? 'home' : 'work')}<span>${k === 'casa' ? 'Casa' : 'Trabajo'}</span></button>`);
-        state.lastTo.forEach((p, i) => { if (chips.length < 3 && ![state.favs.casa, state.favs.trabajo].some(f => f && f.name === p.name)) chips.push(`<button type="button" class="chip" data-go-last="${i}">${icon('recent')}<span>${esc(p.name)}</span></button>`); });
+        // Only the places the rider saved, always in the same order: the app does not guess where they are going.
+        for (const k of ['casa', 'trabajo']) if (state.favs[k]) chips.push(`<button type="button" class="chip" data-go-fav="${k}">${icon(k === 'casa' ? 'home' : 'work')}<span>${k === 'casa' ? 'Casa' : 'Trabajo'}</span></button>`);
       }
       $('quick').hidden = !chips.length;
       $('quick').innerHTML = chips.join('');
@@ -689,6 +688,11 @@ window.SVBoot = function (networkText) {
         if (c !== code) return;
         const to = k + 1 < signs.length ? signs[k + 1][0] - 1 : p.stops.length - 1;
         if (to <= from) return;
+        // A stretch with fewer than two stops that take riders is the bus driving out of service (the 2-8 goes from
+        // its portal to a regulation point before its sign changes), not a direction anyone can ride.
+        let riders = 0;
+        for (let i = from; i <= to && riders < 2; i++) if (E.atStop[p.stops[i]].length) riders++;
+        if (riders < 2) return;
         const trips = p.cnt[day].reduce((a, b) => a + b, 0), turn = loopTurn(p, from, to);
         if (turn < 0) { keep({ pat, from, to, dest, trips }); return; }
         keep({ pat, from, to: turn, dest: E.place(p.stops[turn]).name, trips, part: 'ida', order: 0 });
@@ -698,8 +702,14 @@ window.SVBoot = function (networkText) {
     // The way out goes before the way back; otherwise the busiest direction goes first.
     return [...byDest.values()].sort((a, b) => b.trips - a.trips || (a.order || 0) - (b.order || 0));
   }
-  const codeIndex = (() => { const m = new Map(); E.P.forEach(p => [p.code, ...(p.signs || []).map(x => x[1])].forEach(c => m.set(c.toUpperCase().replace(/\s+/g, ''), c))); return m; })();
-  const routeCodesFor = q => { const k = q.toUpperCase().replace(/\s+/g, ''); return k.length >= 1 && codeIndex.has(k) ? [codeIndex.get(k)] : []; };
+  // A typed code finds the code on the bus (H710, A153) and also the official one in the file (HH710, CA153), which
+  // TransMilenio's own lists use. One official code can show two codes on the bus: CA153 runs as A153 and then C153.
+  const codeIndex = (() => {
+    const m = new Map(), add = (k, c) => (m.get(k) || m.set(k, new Set()).get(k)).add(c);
+    E.P.forEach(p => { const official = E.routes[p.route][0].toUpperCase().replace(/\s+/g, ''); [p.code, ...(p.signs || []).map(x => x[1])].forEach(c => { add(c.toUpperCase().replace(/\s+/g, ''), c); add(official, c); }); });
+    return m;
+  })();
+  const routeCodesFor = q => { const k = q.toUpperCase().replace(/\s+/g, ''); return k.length >= 1 && codeIndex.has(k) ? [...codeIndex.get(k)] : []; };
   const fromMid = (p, pos, sec) => sec + p.cum[pos];
   // Each direction of a route gets its own color, the same on the map and on its card.
   const dirTitle = v => (v.part === 'ida' ? 'Ida · hacia ' : v.part === 'regreso' ? 'Regreso · hacia ' : 'Hacia ') + pretty(v.dest);
@@ -734,7 +744,8 @@ window.SVBoot = function (networkText) {
     const twins = svc ? [...(codeTypes.get(code) || [])].filter(t => t !== svc) : [];
     const twin = twins.map(t => `<p class="twin">Ojo: también hay una ruta ${esc(typeWord(t))} con el código ${esc(code)}, con otro recorrido. <button type="button" class="linkish" data-route-code="${esc(routeKey(code, t))}">Ver la ${esc(typeWord(t))} ${esc(code)}</button></p>`).join('');
     const loop = vs.some(v => v.part) ? ' Sale y vuelve al mismo lugar: la ida y el regreso tienen colores distintos.' : vs.length > 1 ? ' Cada sentido tiene su color, también en el mapa.' : '';
-    return `<div class="verdict"><h2>Ruta ${plate(code, '#' + r0[2], '#' + r0[3])}</h2><p>${esc(SVC[r0[4]] || 'Bus')} · ${vs.length === 1 ? '1 sentido' : `${vs.length} sentidos`}.${loop} Horarios programados del ${dayLabel(net.meta.feed)}.</p>${twin}<button type="button" class="linkish" data-route-close="1">${back}</button></div>${cards}${fineHtml()}`;
+    const officials = [...new Set(vs.map(v => E.routes[E.P[v.pat].route][0]))].filter(c => codeKey(c) !== codeKey(code));
+    return `<div class="verdict"><h2>Ruta ${plate(code, '#' + r0[2], '#' + r0[3])}</h2><p>${esc(SVC[r0[4]] || 'Bus')}${officials.length ? ` (código oficial ${esc(officials.join(', '))})` : ''} · ${vs.length === 1 ? '1 sentido' : `${vs.length} sentidos`}.${loop} Horarios programados del ${dayLabel(net.meta.feed)}.</p>${twin}<button type="button" class="linkish" data-route-close="1">${back}</button></div>${cards}${fineHtml()}`;
   }
 
   // ---------- «Rutas»: every route, searchable by code, destination or station ----------
@@ -752,13 +763,15 @@ window.SVBoot = function (networkText) {
       for (const [, code, dest] of [[0, p.code, p.dest], ...(p.signs || [])]) {
         const id = routeKey(code, r[4]);
         let e = found.get(id);
-        if (!e) found.set(id, e = { id, code, key: codeKey(code), color: '#' + r[2], text: '#' + r[3], svc: r[4], dests: new Map() });
+        if (!e) found.set(id, e = { id, code, key: codeKey(code), color: '#' + r[2], text: '#' + r[3], svc: r[4], dests: new Map(), official: new Set() });
+        if (codeKey(r[0]) !== codeKey(code)) e.official.add(r[0]);
         e.dests.set(dest, (e.dests.get(dest) || 0) + trips + 1);
       }
     });
     routeIndex = [...found.values()].map(e => {
       const dests = [...new Set([...e.dests].sort((a, b) => b[1] - a[1]).map(x => pretty(x[0])))];
-      return { id: e.id, code: e.code, key: e.key, color: e.color, text: e.text, svc: e.svc, twin: codeTypes.get(e.code).size > 1, dests, destKey: norm(dests.join(' ')) };
+      const official = [...e.official].sort();
+      return { id: e.id, code: e.code, key: e.key, color: e.color, text: e.text, svc: e.svc, twin: codeTypes.get(e.code).size > 1, dests, destKey: norm(dests.join(' ')), official, officialKeys: official.map(codeKey) };
     }).sort((a, b) => byCodeOrder(a, b) || a.svc - b.svc);
     routeById = new Map(routeIndex.map(e => [e.id, e]));
     return routeIndex;
@@ -793,7 +806,7 @@ window.SVBoot = function (networkText) {
   }
   const routesUi = { q: '', kind: 'todas', shown: 40, at: null };
   const destLine = e => !e.dests.length ? 'Sin destino en el archivo' : 'Hacia ' + e.dests.slice(0, 2).join(' · ') + (e.dests.length > 2 ? ` y ${e.dests.length - 2} más` : '');
-  const routeRow = e => `<button type="button" class="opt route-row" data-route-code="${esc(e.id)}"><span class="route-plate">${plate(e.code, e.color, e.text)}</span><span class="opt-t"><b>${esc(destLine(e))}</b><small>${esc(SVC[e.svc] || 'Bus')}${e.twin ? ' · hay otra ruta con este código' : ''}</small></span></button>`;
+  const routeRow = e => `<button type="button" class="opt route-row" data-route-code="${esc(e.id)}"><span class="route-plate">${plate(e.code, e.color, e.text)}</span><span class="opt-t"><b>${esc(destLine(e))}</b><small>${esc(SVC[e.svc] || 'Bus')}${e.official.length ? ` · código oficial ${esc(e.official.join(', '))}` : ''}${e.twin ? ' · hay otra ruta con este código' : ''}</small></span></button>`;
   const inKind = e => routesUi.kind === 'todas' || kindOf(e.svc) === routesUi.kind;
   function placeBlock(title, sub, list, closed) {
     const rows = list.filter(inKind);
@@ -817,7 +830,8 @@ window.SVBoot = function (networkText) {
       if (list.length > routesUi.shown) html += `<button type="button" class="btn wide more-link" data-routes-more="1">Ver ${Math.min(40, list.length - routesUi.shown)} más</button>`;
     } else {
       const key = codeKey(q), words = norm(q);
-      const byCode = key ? all.filter(e => inKind(e) && e.key.startsWith(key)).sort((a, b) => (b.key === key) - (a.key === key) || byCodeOrder(a, b)) : [];
+      const exact = e => e.key === key || e.officialKeys.includes(key);
+      const byCode = key ? all.filter(e => inKind(e) && (e.key.startsWith(key) || e.officialKeys.some(k => k.startsWith(key)))).sort((a, b) => exact(b) - exact(a) || byCodeOrder(a, b)) : [];
       const listed = new Set(byCode.map(e => e.id));
       if (byCode.length) html += `<h3 class="list-title">Con ese código <small>${byCode.length}</small></h3>` + byCode.slice(0, 40).map(routeRow).join('');
       // Stations and stops with that name: the routes that stop there.
@@ -876,11 +890,17 @@ window.SVBoot = function (networkText) {
         }
       }
       html += optRow('mapPick', 'Elegir en el mapa', '', 'data-open-map="1"', 'map-opt');
-      if (lost) html += '<p class="hint">Escribe arriba una estación, un barrio o un lugar cerca de ti: Portal Suba, Kennedy, Unicentro.</p>';
-      else html += `<p class="list-title">¿Qué estás buscando?</p><div class="cats">${BusGeo.CATEGORIES.map(c => `<button type="button" class="cat ${CAT_COLOR[c.id] || 'c-blue'}" data-cat="${c.id}">${esc(c.label)}</button>`).join('')}</div>`;
-      // The other end of the trip is left out: choosing it would mean going nowhere.
+      // Saved trips and places: here, while the rider is searching, and never on the opening screen.
       const otherEnd = target === 'from' ? state.to : state.from, seen = new Set(otherEnd ? [otherEnd.name] : []);
-      [...state.lastTo, ...state.recent.flatMap(r => [r.from, r.to])].forEach(p => { if (p && !seen.has(p.name)) { seen.add(p.name); html += rowHtml(p, add({ ...p, known: true }), 'Reciente', 'recent'); } });
+      const savedTrips = target === 'to' && !state.savingFav ? state.recent : [];
+      const savedPlaces = [...state.lastTo, ...state.recent.flatMap(r => [r.from, r.to])].filter(p => p && !seen.has(p.name) && seen.add(p.name));
+      if (savedTrips.length || savedPlaces.length) {
+        html += '<p class="list-title">Guardados</p>';
+        html += savedTrips.map(r => optRow('recent', `${r.from.name} → ${r.to.name}`, 'Viaje guardado', `data-recent="${esc(r.key)}"`)).join('');
+        html += savedPlaces.map(p => rowHtml(p, add({ ...p, known: true }), 'Lugar guardado', 'recent')).join('');
+      }
+      if (lost) html += '<p class="hint">Escribe arriba una estación, un barrio o un lugar cerca de ti: Portal Suba, Kennedy, Unicentro.</p>';
+      else html +=`<p class="list-title">¿Qué estás buscando?</p><div class="cats">${BusGeo.CATEGORIES.map(c => `<button type="button" class="cat ${CAT_COLOR[c.id] || 'c-blue'}" data-cat="${c.id}">${esc(c.label)}</button>`).join('')}</div>`;
       if (!lost) html += `<p class="hint">${WEB ? 'Escribe como lo dirías: calle 72 con 10, la Caracas con 45, Unicentro o Portal Suba.' : 'Escribe una estación, un barrio o una esquina: Portal Suba, Kennedy, calle 72 con 10.'}</p>`;
       $('pickerList').innerHTML = html;
       return;
@@ -891,6 +911,14 @@ window.SVBoot = function (networkText) {
         const vs = routeVariants(code, t);
         if (vs.length) html += optRow('route', `Ruta ${code}${types.length > 1 ? ` · ${SVC[t] || 'Bus'}` : ''}`, `Ver su recorrido · hacia ${vs.slice(0, 2).map(v => pretty(v.dest)).join(' y ')}`, `data-route-code="${esc(routeKey(code, t))}"`, 'map-opt');
       }
+    }
+    // A saved place that matches what the rider typed goes first: they searched it before.
+    const typed = norm(query);
+    if (typed.length >= 2 && !state.savingFav) {
+      const hit = new Set();
+      [state.favs.casa, state.favs.trabajo, ...state.lastTo, ...state.recent.flatMap(r => [r.from, r.to])]
+        .filter(p => p && p.kind !== 'gps' && norm(p.name).includes(typed) && !hit.has(p.name) && hit.add(p.name))
+        .slice(0, 3).forEach(p => { html += rowHtml(p, add({ ...p, known: true }), 'Guardado', 'recent'); });
     }
     // A link from Google Maps or WhatsApp, or plain coordinates.
     const linked = linkCoords(query);
@@ -1724,7 +1752,6 @@ window.SVBoot = function (networkText) {
     else if (t.dataset.lite) { state.lite = t.dataset.lite; persist(); applyLite(); render(); }
     else if (t.dataset.useAlt) { const alt = nearestServed(state[t.dataset.useAlt]); if (alt) { state[t.dataset.useAlt] = plain(alt.place); remember(); persist(); render(); window.scrollTo(0, 0); } }
     else if (t.dataset.goFav) { target = 'to'; choose({ ...state.favs[t.dataset.goFav], known: true }); }
-    else if (t.dataset.goLast !== undefined) { target = 'to'; choose({ ...state.lastTo[+t.dataset.goLast], known: true }); }
     else if (t.dataset.legal) openLegal();
     else if (t.dataset.help) openHelp();
     else if (t.id === 'helpClose') $('helpSheet').hidden = true;
@@ -1754,7 +1781,7 @@ window.SVBoot = function (networkText) {
     else if (t.dataset.openMap) openMap('pick');
     else if (t.dataset.mapOption !== undefined) openMap('view', lastOptions[+t.dataset.mapOption]);
     else if (t.dataset.follow !== undefined) startFollow(lastOptions[+t.dataset.follow]);
-    else if (t.dataset.recent) { const r = state.recent.find(x => x.key === t.dataset.recent); if (r) { state.from = r.from; state.to = r.to; state.fromGps = false; state.example = false; state.mode = 'now'; state.formOpen = false; remember(); persist(); render(); window.scrollTo(0, 0); } }
+    else if (t.dataset.recent) { const r = state.recent.find(x => x.key === t.dataset.recent); if (r) { $('picker').hidden = true; state.from = r.from; state.to = r.to; state.fromGps = false; state.example = false; state.mode = 'now'; state.formOpen = false; remember(); persist(); render(); window.scrollTo(0, 0); } }
     else if (t.id === 'openForm') { state.formOpen = true; renderForm(); window.scrollTo(0, 0); }
     else if (t.id === 'closeForm') { state.formOpen = false; renderForm(); window.scrollTo(0, 0); }
     else if (t.id === 'fromField') openPicker('from');
@@ -1978,10 +2005,8 @@ window.SVBoot = function (networkText) {
   if (WEB && navigator.geolocation && navigator.permissions && navigator.permissions.query) {
     navigator.permissions.query({ name: 'geolocation' }).then(p => {
       if (p.state !== 'granted') return;
-      // After hours away the current position is a better guess than the origin chosen back then.
-      const stale = !!saved && !fresh;
       if (shared) return;
-      locate().then(g => { if (g && (stale || !state.from && state.fromGps || state.from && state.from.kind === 'gps')) { state.from = gpsPlace(); state.fromGps = true; } render(); });
+      locate().then(g => { if (g && (!state.from && state.fromGps || state.from && state.from.kind === 'gps')) { state.from = gpsPlace(); state.fromGps = true; } render(); });
     }).catch(() => {});
   }
   window.__sinVueltas = { state, E, FOLLOW, Planner, MAP, RM, Streets, rideLine, render, Update, checkForUpdate, Photon }; // handy when debugging on a phone
