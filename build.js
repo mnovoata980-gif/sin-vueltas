@@ -47,6 +47,12 @@ const webHead = `<!doctype html>
 <title>Sin Vueltas</title>
 <meta name="description" content="Rutas de TransMilenio y SITP en Bogotá con el número de buses que tú decides. App no oficial.">
 <meta name="theme-color" content="#1b3fcb">
+${config.siteUrl ? `<meta property="og:title" content="Sin Vueltas">
+<meta property="og:description" content="Rutas de TransMilenio y SITP en Bogotá con el número de buses que tú decides.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${config.siteUrl}">
+<meta property="og:image" content="${config.siteUrl}icon-512.png">
+<meta name="twitter:card" content="summary">` : ''}
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-180.png">

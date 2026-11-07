@@ -331,7 +331,8 @@ window.SVBoot = function (networkText) {
       $('fromText').textContent = fromLine();
       const chips = [];
       if (!state.to) {
-        for (const k of ['casa', 'trabajo']) if (state.favs[k]) chips.push(`<button type="button" class="chip" data-go-fav="${k}">${icon(k === 'casa' ? 'home' : 'work')}<span>${k === 'casa' ? 'Casa' : 'Trabajo'}</span></button>`);
+        const hour = Math.floor(bogotaNow().sec / 3600), order = hour < 12 ? ['trabajo', 'casa'] : ['casa', 'trabajo'];
+        for (const k of order) if (state.favs[k]) chips.push(`<button type="button" class="chip" data-go-fav="${k}">${icon(k === 'casa' ? 'home' : 'work')}<span>${k === 'casa' ? 'Casa' : 'Trabajo'}</span></button>`);
         state.lastTo.forEach((p, i) => { if (chips.length < 3 && ![state.favs.casa, state.favs.trabajo].some(f => f && f.name === p.name)) chips.push(`<button type="button" class="chip" data-go-last="${i}">${icon('recent')}<span>${esc(p.name)}</span></button>`); });
       }
       $('quick').hidden = !chips.length;
@@ -355,6 +356,8 @@ window.SVBoot = function (networkText) {
   const SVC = { 1: 'Troncal', 2: 'Alimentador', 3: 'Zonal', 4: 'Complementario', 5: 'Especial', 6: 'Dual', 7: 'TransMiCable' };
   let lastOptions = [];
 
+  const giveUpMin = l => Math.min(45, Math.max(10, Math.round((2 * l.hwAll + 300) / 300) * 5));
+  const planB = l => (l.also.length ? `toma el ${l.also[0].code}, que también te sirve` : 'busca otra ruta desde ahí: puede haber un cierre o un desvío');
   function stepsHtml(o) {
     const out = [];
     const walkStep = html => out.push(`<li class="step walk"><div class="rail"></div><div class="step-body">${html}</div></li>`);
@@ -381,8 +384,9 @@ window.SVBoot = function (networkText) {
       const via = [...new Set(l.via.map(pretty))];
       out.push(`<li class="step" style="--rail:${esc(l.color)}"><div class="rail"></div><div class="step-body">
         <p>${plate(l.code, l.color, l.text)} <span class="step-title">hacia ${esc(pretty(l.dest))}</span></p>
-        <p class="step-meta">${SVC[l.agency] || 'Bus'} · súbete en <b>${esc(pretty(l.boardPlace.name))}</b>${l.boardPlace.platform ? ` (${esc(pretty(l.boardPlace.platform))})` : ''}</p>
+        <p class="step-meta">${SVC[l.agency] || 'Bus'} · súbete en <b>${esc(pretty(l.boardPlace.name))}</b>${l.boardPlace.platform ? `, ${esc(platformLabel(l.boardPlace.platform))}` : ''}</p>
         <p class="step-meta">${freq}. Espera estimada: ${mins(l.wait)} min</p>${also}
+        <p class="step-meta">Si en ${giveUpMin(l)} min no ha pasado, ${planB(l)}.</p>
         ${l.signChange ? `<p class="warn">En el camino su letrero cambia a ${esc(l.signChange.code)}. Es el mismo bus: sigue hasta tu parada.</p>` : ''}
         ${l.nearLast ? '<p class="warn">Es de los últimos buses del día en esta ruta</p>' : ''}
         ${l.hwAll >= 1500 && !l.nearLast ? '<p class="warn">Pasa poco a esta hora. Llega con tiempo</p>' : ''}
@@ -393,6 +397,23 @@ window.SVBoot = function (networkText) {
     return out.join('');
   }
   const money = n => '$' + String(n).replace(/\B(?=(\d{3})+$)/g, '.');
+  // The file names platforms "Alcalá C - 2 ó 5": car C, doors 2 or 5. A trailing "-T" marks a temporary station.
+  function platformLabel(raw) {
+    if (!raw) return '';
+    const text = String(raw).trim(), temporary = /-\s*T\.?$/.test(text);
+    // Lowercase endings such as "-nw" are internal tags of the file, not part of what the sign says.
+    const clean = text.replace(/\.\s*$/, '').replace(/-\s*T\.?$/, '').replace(/-\s*(?:[a-z]{1,3}|NW)$/, '').trim();
+    const m = clean.match(/\s([A-H])\s*-?\s*(\d)(?:\s*(?:ó|o|y)\s*(\d))?(?:\s+[IV]+)?\s*$/);
+    if (m) return `vagón ${m[1]}, ${m[3] ? `puertas ${m[2]} o ${m[3]}` : `puerta ${m[2]}`}${temporary ? ', estación temporal' : ''}`;
+    const feeder = clean.match(/Alim\.?\s*Plat\.?\s*(\d+)/i);
+    if (feeder) return `plataforma de alimentadores ${feeder[1]}`;
+    const numbered = clean.match(/\b(?:PLT|Plat)\.?\s*(\d+)$/i);
+    if (numbered) return `plataforma ${numbered[1]}`;
+    const bay = clean.match(/\s(T-?\d+[A-Z]?(?:\s?[A-Z])?)\.?$/);
+    if (bay) return `plataforma ${bay[1].replace(/[\s-]/g, '')}`;
+    return pretty(text);
+  }
+
   // What this rider pays. The difference between cards appears only when it exists, and "No sé" shows both.
   function priceOf(o) {
     const f = o.fare;
@@ -434,7 +455,7 @@ window.SVBoot = function (networkText) {
         ${reasons && reasons.length ? `<ul class="reasons">${reasons.map(x => `<li>${icon('check')}${esc(x)}</li>`).join('')}</ul>` : ''}
       </div>
       ${actions}
-      <details class="steps-box"><summary>Ver el paso a paso${icon('down')}</summary><ol class="steps">${stepsHtml(o)}</ol><button type="button" class="linkish report-link" data-report="${id}">Reportar un error en esta ruta</button></details>
+      <details class="steps-box"><summary>Ver el paso a paso${icon('down')}</summary><ol class="steps">${stepsHtml(o)}</ol><div class="trip-links"><button type="button" class="linkish" data-share="${id}">Compartir este viaje</button><button type="button" class="linkish" data-report="${id}">Reportar un error en esta ruta</button></div></details>
     </article>`;
   }
   // The trip at a glance: walking, waiting and each bus in its own color, all on the same time scale,
@@ -497,10 +518,11 @@ window.SVBoot = function (networkText) {
     return `<section class="nearby"><h3 class="group-title">${title} <small>lo que pasa ahora</small></h3>${list.map((n, i) => `
       <details class="near"${i === 0 ? ' open' : ''}>
         <summary><b>${esc(pretty(n.name))}</b><small>${mins(n.walkSec)} min a pie · ${distLabel(n.meters)}</small></summary>
-        <ul class="near-routes">${n.routes.slice(0, 6).map(x => `<li>${plate(x.code, x.color, x.text, true)}<span>hacia ${esc(pretty(x.dest))}</span><small>cada ~${mins(x.hw)} min</small></li>`).join('')}</ul>
-        ${n.routes.length > 6 ? `<p class="step-meta">y ${n.routes.length - 6} rutas más</p>` : ''}
+        <ul class="near-routes">${n.routes.slice(0, 6).map(nearRow).join('')}</ul>
+        ${n.routes.length > 6 ? `<details class="more-routes"><summary>Ver las otras ${n.routes.length - 6} rutas</summary><ul class="near-routes">${n.routes.slice(6).map(nearRow).join('')}</ul></details>` : ''}
       </details>`).join('')}</section>`;
   }
+  const nearRow = x => `<li><button type="button" class="near-route" data-route-code="${esc(x.code)}">${plate(x.code, x.color, x.text, true)}<span>hacia ${esc(pretty(x.dest))}</span><small>cada ~${mins(x.hw)} min</small></button></li>`;
   function homeHtml() {
     const problem = gpsProblem();
     let html = '';
@@ -516,15 +538,18 @@ window.SVBoot = function (networkText) {
       </section>`;
     }
     if (!state.to && !WEB) html += '<div class="verdict"><p>Dinos a dónde vas y de dónde sales.</p><button type="button" class="linkish" id="showExample">Ver un viaje de ejemplo</button></div>';
+    if (!state.recent.length && !state.lastTo.length) html += '<button type="button" class="linkish first-time" data-help="1">¿Primera vez en TransMilenio? Así funciona</button>';
     return html + nearbyHtml() + fineHtml();
   }
   let renderSeq = 0;
   function render() {
     renderForm();
     const seq = ++renderSeq, box = $('results');
+    if (state.routeView) { lastOptions = []; box.innerHTML = routeHtml(state.routeView); return; }
     if (!state.from || !state.to) { lastOptions = []; box.innerHTML = homeHtml(); return; }
     if (dist(state.from.lat, state.from.lon, state.to.lat, state.to.lon) < 60) { lastOptions = []; box.innerHTML = '<div class="verdict"><h2>Ya estás ahí</h2><p>El origen y el destino son el mismo lugar. Cambia uno de los dos.</p></div>'; return; }
     const q = currentQuery();
+    if (state.routeView) { lastOptions = []; box.innerHTML = routeHtml(state.routeView); return; }
     // Only mention the wait if it is noticeable, so fast phones never flash a message.
     const notice = setTimeout(() => { if (seq === renderSeq) box.innerHTML = '<p class="calc">Calculando tu ruta…</p>'; }, 250);
     Planner.recommend({ from: state.from, to: state.to, day: q.day, time: q.time, arriveBy: q.arriveBy, limit: state.limit, maxWalk: state.walk * 60, pref: state.pref }).then(r => {
@@ -591,6 +616,7 @@ window.SVBoot = function (networkText) {
       if (s >= 300) extra = `Con ${busWord(faster.buses)} llegarías ${mins(s)} min antes.${costOf(faster)}`;
       else if (s > 30) extra = `Otro bus solo te ahorra ${mins(s)} min. No vale el transbordo.`;
     } else if (beyond && beyond.saves >= 300) extra = `Si aceptaras ${busWord(beyond.buses)}, llegarías ${mins(beyond.saves)} min antes.${costOf(beyond.options[0])}`;
+    if (r.night) extra = `${extra} De noche damos prioridad a caminar y esperar menos.`.trim();
     // Late at night the best trip can start with hours of waiting, and the rider should know why.
     if (!arriving && first.wait >= 1800) {
       const walkFirst = best.legs[0].type === 'walk' ? best.legs[0].sec : 0;
@@ -628,7 +654,52 @@ window.SVBoot = function (networkText) {
     const liteOn = isLite(), liteSaid = !liteOn ? 'Modo ligero: letra del sistema, mapa simple y sin animaciones, para gastar menos datos.' : state.lite === 'on' ? 'Modo ligero activado.' : `Modo ligero activado porque ${why}.`;
     const lite = `<p class="lite-line"><span>${liteSaid}</span><button type="button" class="linkish" data-lite="${liteOn ? 'off' : 'on'}">${liteOn ? 'Desactivar' : 'Activar'}</button></p>`;
     const update = updateLine();
-    return `<footer class="fine">${lite}<p class="update-line"${update ? '' : ' hidden'}>${update}</p><p>Rutas oficiales de TransMilenio del ${d}/${m}/${y}.${stale} Los tiempos salen de horarios programados. No es información en vivo: el bus real puede adelantarse o retrasarse.</p><p>Precios estimados con las reglas de 2026: pasaje de ${price} y hasta ${rules.maxTransfers} transbordos gratis en ${rules.windowMin} minutos con tarjeta personalizada. No incluyen subsidios ni pasajes gratuitos, y el cobro en alimentadores puede variar.</p>${preview}<p><b>Sin Vueltas no es una app oficial</b> de TransMilenio ni de la Alcaldía de Bogotá. Rutas: <a href="https://datosabiertos-transmilenio.hub.arcgis.com/" target="_blank" rel="noopener">datos abiertos de TransMilenio</a>.${WEB ? ' Mapa y direcciones: © colaboradores de <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, OpenFreeMap y OpenMapTiles. Búsqueda: Photon, de komoot.' : ''} En una emergencia llama al 123.</p><p><button type="button" class="linkish" data-legal="1">Privacidad, términos y borrar mis datos</button></p></footer>`;
+    return `<footer class="fine">${lite}<p class="update-line"${update ? '' : ' hidden'}>${update}</p><p>Rutas oficiales de TransMilenio del ${d}/${m}/${y}.${stale} Los tiempos salen de horarios programados. No es información en vivo: el bus real puede adelantarse o retrasarse.</p><p>Precios estimados con las reglas de 2026: pasaje de ${price} y hasta ${rules.maxTransfers} transbordos gratis en ${rules.windowMin} minutos con tarjeta personalizada. No incluyen subsidios ni pasajes gratuitos, y el cobro en alimentadores puede variar.</p>${preview}<p><b>Sin Vueltas no es una app oficial</b> de TransMilenio ni de la Alcaldía de Bogotá. Rutas: <a href="https://datosabiertos-transmilenio.hub.arcgis.com/" target="_blank" rel="noopener">datos abiertos de TransMilenio</a>.${WEB ? ' Mapa y direcciones: © colaboradores de <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, OpenFreeMap y OpenMapTiles. Búsqueda: Photon, de komoot.' : ''} En una emergencia llama al 123.</p><p class="foot-links"><button type="button" class="linkish" data-help="1">Cómo funciona el sistema e instalar la app</button><button type="button" class="linkish" data-legal="1">Privacidad, términos y borrar mis datos</button></p></footer>`;
+  }
+
+  // ---------- one route, all of it ----------
+  // Every stretch of every pattern that shows this code, keeping the busiest one for each destination.
+  function routeVariants(code) {
+    const day = currentQuery().day, byDest = new Map();
+    E.P.forEach((p, pat) => {
+      const signs = [[0, p.code, p.dest], ...(p.signs || [])];
+      signs.forEach(([from, c, dest], k) => {
+        if (c !== code) return;
+        const to = k + 1 < signs.length ? signs[k + 1][0] - 1 : p.stops.length - 1;
+        if (to <= from) return;
+        const trips = p.cnt[day].reduce((a, b) => a + b, 0), v = { pat, from, to, dest, trips };
+        const old = byDest.get(dest);
+        if (!old || trips > old.trips || (trips === old.trips && to - from > old.to - old.from)) byDest.set(dest, v);
+      });
+    });
+    return [...byDest.values()].sort((a, b) => b.trips - a.trips);
+  }
+  const codeIndex = (() => { const m = new Map(); E.P.forEach(p => [p.code, ...(p.signs || []).map(x => x[1])].forEach(c => m.set(c.toUpperCase().replace(/\s+/g, ''), c))); return m; })();
+  const routeCodesFor = q => { const k = q.toUpperCase().replace(/\s+/g, ''); return k.length >= 1 && codeIndex.has(k) ? [codeIndex.get(k)] : []; };
+  const fromMid = (p, pos, sec) => sec + p.cum[pos];
+  function routeLeg(v) {
+    const p = E.P[v.pat], r = E.routes[p.route];
+    return { type: 'ride', pat: v.pat, bPos: v.from, aPos: v.to, board: p.stops[v.from], alight: p.stops[v.to], code: state.routeView, dest: v.dest, color: '#' + r[2], text: '#' + r[3], boardPlace: E.place(p.stops[v.from]), alightPlace: E.place(p.stops[v.to]) };
+  }
+  function routeHtml(code) {
+    const vs = routeVariants(code), q = currentQuery(), h = Math.floor(q.time / 3600);
+    if (!vs.length) return `<div class="verdict"><h2>No encontramos la ruta ${esc(code)}</h2></div>`;
+    const p0 = E.P[vs[0].pat], r0 = E.routes[p0.route];
+    const cards = vs.map((v, i) => {
+      const p = E.P[v.pat], perHour = p.cnt[q.day][h] || 0, stops = p.stops.slice(v.from, v.to + 1).filter(s => E.atStop[s].length);
+      const runMin = mins(p.cum[v.to] - p.cum[v.from]), first = p.first[q.day], last = p.last[q.day];
+      const service = last < 0 ? '<p class="warn">Hoy no tiene salidas en el archivo oficial.</p>'
+        : `<p class="meta">${perHour ? `Ahora pasa cada ~${Math.max(1, Math.round(60 / perHour))} min` : 'A esta hora no pasa'} · primer bus ${clock(fromMid(p, v.from, first))} · último ${clock(fromMid(p, v.from, last))}</p>`;
+      const names = stops.map(s => pretty(E.place(s).name));
+      return `<article class="card route-card"><div class="card-main">
+        <h3 class="group-title">Hacia ${esc(pretty(v.dest))}</h3>
+        <p class="meta">${stops.length} paradas · ${runMin} min de punta a punta · de ${esc(names[0])} a ${esc(names[names.length - 1])}</p>
+        ${service}
+        <details class="via"><summary>Ver las ${stops.length} paradas</summary><ol>${names.map(n => `<li>${esc(n)}</li>`).join('')}</ol></details>
+        <div class="card-actions route-actions"><button type="button" class="btn" data-route-map="${i}">${icon('map')}Ver en el mapa</button></div>
+      </div></article>`;
+    }).join('');
+    return `<div class="verdict"><h2>Ruta ${plate(code, '#' + r0[2], '#' + r0[3])}</h2><p>${esc(SVC[r0[4]] || 'Bus')} · ${vs.length === 1 ? '1 sentido' : `${vs.length} sentidos`}. Horarios programados del ${dayLabel(net.meta.feed)}.</p><button type="button" class="linkish" data-route-close="1">Volver</button></div>${cards}${fineHtml()}`;
   }
 
   // ---------- place picker ----------
@@ -643,7 +714,7 @@ window.SVBoot = function (networkText) {
     renderPicker('');
     setTimeout(() => input.focus(), 30);
   }
-  const KIND_ICON = { station: 'bus', stop: 'bus', geo: 'pin', point: 'pin', gps: 'target', home: 'home', work: 'work', recent: 'recent', mapPick: 'map' };
+  const KIND_ICON = { route: 'bus', station: 'bus', stop: 'bus', geo: 'pin', point: 'pin', gps: 'target', home: 'home', work: 'work', recent: 'recent', mapPick: 'map' };
   const optRow = (kind, title, sub, attrs, extraClass) => `<button type="button" class="opt ${extraClass || ''}" ${attrs}><span class="opt-i k-${kind}">${icon(KIND_ICON[kind] || 'pin')}</span><span class="opt-t"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span></button>`;
   function rowHtml(p, i, sub, kind, title) { return optRow(kind || p.kind || 'geo', title || p.name, sub !== undefined ? sub : subLabel(p), `data-pick="${i}"`); }
   const CAT_COLOR = { hospital: 'c-red', clinica: 'c-red', universidad: 'c-blue', centro: 'c-yellow', biblioteca: 'c-green', notaria: 'c-blue', viajes: 'c-green' };
@@ -675,6 +746,14 @@ window.SVBoot = function (networkText) {
       $('pickerList').innerHTML = html;
       return;
     }
+    for (const code of routeCodesFor(query)) {
+      const vs = routeVariants(code);
+      if (vs.length) html += optRow('route', `Ruta ${code}`, `Ver su recorrido · hacia ${vs.slice(0, 2).map(v => pretty(v.dest)).join(' y ')}`, `data-route-code="${esc(code)}"`, 'map-opt');
+    }
+    // A link from Google Maps or WhatsApp, or plain coordinates.
+    const linked = linkCoords(query);
+    if (linked) html += rowHtml(linked, add(linked), `Del enlace · ${nearText(linked) || 'Bogotá'}`, 'point');
+    else if (/maps\.app\.goo\.gl|goo\.gl\/maps/i.test(query)) html += '<p class="hint">Los enlaces cortos de Google Maps no se pueden abrir desde aquí. En Google Maps mantén presionado el punto, copia las coordenadas que aparecen arriba y pégalas aquí.</p>';
     const addr = BusGeo.parseAddress(query);
     // An address like "Calle 72 # 10-20" sits on the corner of Calle 72 and Carrera 10, and many stops are named after corners.
     const corner = !addr ? [] : addr.road ? searchPlaces(`${addr.roadWord} ${addr.cross}`, 3, true)
@@ -916,7 +995,9 @@ window.SVBoot = function (networkText) {
       $('realMap').hidden = false;
       if (RM.after) { RM.after(); RM.after = null; }
     });
-    RM.map.on('click', e => { if (MAP.mode === 'pick' || MAP.mode === 'confirm') { const z = RM.map.getZoom(), mpp = 78271.5 * Math.cos(e.lngLat.lat * Math.PI / 180) / Math.pow(2, z); pickGeo(e.lngLat.lat, e.lngLat.lng, mpp); } });
+    // Choosing a point: the map moves under a fixed pin, which is more precise than a fingertip on a small screen.
+    RM.map.on('moveend', e => { if (MAP.mode === 'pick' && e.originalEvent) { const c = RM.map.getCenter(); pickGeo(c.lat, c.lng, 78271.5 * Math.cos(c.lat * Math.PI / 180) / Math.pow(2, RM.map.getZoom())); } });
+    RM.map.on('click', e => { if (MAP.mode === 'pick') RM.map.easeTo({ center: e.lngLat, duration: 300 }); if (MAP.mode === 'pick' || MAP.mode === 'confirm') { const z = RM.map.getZoom(), mpp = 78271.5 * Math.cos(e.lngLat.lat * Math.PI / 180) / Math.pow(2, z); pickGeo(e.lngLat.lat, e.lngLat.lng, mpp); } });
   }
   function addRealLayers() {
     const m = RM.map;
@@ -1028,13 +1109,13 @@ window.SVBoot = function (networkText) {
     const lines = [], points = [];
     const coordOf = s => [E.lon[s], E.lat[s]];
     const rides = o.legs.filter(l => l.type === 'ride');
-    const from = state.from, to = state.to;
+    const from = o.routeView ? null : state.from, to = o.routeView ? null : state.to;
     if (from) lines.push(line([[from.lon, from.lat], coordOf(rides[0].board)], { walk: 1 }));
     o.legs.forEach(l => {
       if (l.type === 'ride') {
         lines.push(line(rideLine(l).map(p => [p[1], p[0]]), { color: l.color }));
-        points.push(pt(E.lat[l.board], E.lon[l.board], { name: `${l.code}: ${pretty(l.boardPlace.name)}` }));
-        points.push(pt(E.lat[l.alight], E.lon[l.alight], { name: `Bájate: ${pretty(l.alightPlace.name)}` }));
+        points.push(pt(E.lat[l.board], E.lon[l.board], { name: o.routeView ? `${l.code} hacia ${pretty(l.dest)}` : `${l.code}: ${pretty(l.boardPlace.name)}` }));
+        if (!o.routeView) points.push(pt(E.lat[l.alight], E.lon[l.alight], { name: `Bájate: ${pretty(l.alightPlace.name)}` }));
       } else if (l.fromStop !== undefined) lines.push(line([coordOf(l.fromStop), coordOf(l.toStop)], { walk: 1 }));
     });
     if (to) lines.push(line([coordOf(rides[rides.length - 1].alight), [to.lon, to.lat]], { walk: 1 }));
@@ -1045,7 +1126,7 @@ window.SVBoot = function (networkText) {
       const m = RM.map, g = MAP.option ? tripGeo(MAP.option) : { lines: [], points: [] };
       m.getSource('trip').setData(fc(g.lines));
       m.getSource('tripPts').setData(fc(g.points));
-      m.getSource('picked').setData(fc(MAP.picked ? [pt(MAP.picked.lat, MAP.picked.lon, { name: MAP.picked.name.length > 40 ? MAP.picked.name.slice(0, 38) + '…' : MAP.picked.name })] : []));
+      m.getSource('picked').setData(fc(MAP.picked && MAP.mode !== 'pick' ? [pt(MAP.picked.lat, MAP.picked.lon, { name: MAP.picked.name.length > 40 ? MAP.picked.name.slice(0, 38) + '…' : MAP.picked.name })] : []));
       m.getSource('me').setData(fc(MAP.me ? [pt(MAP.me.lat, MAP.me.lon)] : []));
     } else queueDraw();
   }
@@ -1149,7 +1230,7 @@ window.SVBoot = function (networkText) {
     for (const i of stationsServed) if (/^Portal/.test(S.n[i])) label(sx(mx[i]), sy(my[i]), pretty(S.n[i]), true);
     if (s > 0.03) for (const i of stationsServed) label(sx(mx[i]), sy(my[i]), pretty(S.n[i]), true);
     if (s > 0.3) for (const i of usedStops) label(sx(mx[i]), sy(my[i]), pretty(S.n[i]), false);
-    if (MAP.picked) {
+    if (MAP.picked && MAP.mode !== 'pick') {
       const x = sx(toX(MAP.picked.lon)), y = sy(toY(MAP.picked.lat));
       g.beginPath(); g.arc(x, y, 22, 0, 7); g.fillStyle = PIN; g.globalAlpha = .18; g.fill(); g.globalAlpha = 1;
       g.beginPath(); g.arc(x, y, 11, 0, 7); g.fillStyle = PIN; g.fill(); g.lineWidth = 4; g.strokeStyle = '#ffffff'; g.stroke();
@@ -1190,7 +1271,12 @@ window.SVBoot = function (networkText) {
     const up = e => {
       if (!pts.has(e.pointerId)) return;
       const p = pos(e); pts.delete(e.pointerId); pinch = 0;
-      if (!pts.size && moved < 8 && Date.now() - downAt < 600 && (MAP.mode === 'pick' || MAP.mode === 'confirm')) {
+      const tapped = !pts.size && moved < 8 && Date.now() - downAt < 600;
+      if (MAP.mode === 'pick' && !pts.size) {
+        // The pin stays in the middle: a tap brings that spot under it, a drag moves the map beneath it.
+        if (tapped) { MAP.cx = (p[0] - MAP.w / 2) / MAP.scale + MAP.cx; MAP.cy = (p[1] - MAP.h / 2) / MAP.scale + MAP.cy; queueDraw(); }
+        pickGeo(-MAP.cy / KY + LAT0, MAP.cx / KX + LON0, 1 / MAP.scale);
+      } else if (tapped && MAP.mode === 'confirm') {
         const wx = (p[0] - MAP.w / 2) / MAP.scale + MAP.cx, wy = (p[1] - MAP.h / 2) / MAP.scale + MAP.cy;
         pickGeo(-wy / KY + LAT0, wx / KX + LON0, 1 / MAP.scale);
       }
@@ -1213,9 +1299,10 @@ window.SVBoot = function (networkText) {
     MAP.me = state.gps ? { lat: state.gps.lat, lon: state.gps.lon } : null;
     $('mapSheet').hidden = false;
     const confirming = mode === 'confirm';
-    $('mapTitle').textContent = confirming ? '¿Es aquí?' : mode === 'pick' ? (target === 'from' ? 'Toca de dónde sales' : 'Toca a dónde vas') : mode === 'follow' ? 'En viaje' : 'Tu recorrido';
+    $('mapTitle').textContent = confirming ? '¿Es aquí?' : mode === 'pick' ? (target === 'from' ? 'Toca de dónde sales' : 'Toca a dónde vas') : mode === 'follow' ? 'En viaje' : option && option.routeView ? `Ruta ${option.legs[0].code}` : 'Tu recorrido';
     $('mapTip').hidden = mode !== 'pick' && !confirming;
-    $('mapTip').textContent = confirming ? 'Si no es este lugar, toca el punto correcto.' : 'Toca el punto que quieres. Acerca el mapa con los dedos.';
+    $('mapTip').textContent = confirming ? 'Si no es este lugar, toca el punto correcto.' : 'Mueve el mapa hasta dejar el pin sobre tu punto.';
+    $('centerPin').hidden = mode !== 'pick';
     $('mapBar').hidden = mode !== 'pick' && !confirming;
     $('followBar').hidden = mode !== 'follow';
     $('mapClose').hidden = mode === 'follow';
@@ -1337,6 +1424,7 @@ window.SVBoot = function (networkText) {
   function followStep(lat, lon) {
     const st = FOLLOW.stages[FOLLOW.i];
     if (!st) return;
+    if (FOLLOW.seenStage !== FOLLOW.i) { FOLLOW.seenStage = FOLLOW.i; FOLLOW.stageAt = Date.now(); }
     $('fRecalc').hidden = true;
     if (st.type === 'done') { showFollow('Llegaste', `Estás cerca de ${state.to.name}.`, 'good', '', 'Llegaste a tu destino.'); $('fNext').hidden = true; return; }
     $('fNext').hidden = false;
@@ -1349,6 +1437,12 @@ window.SVBoot = function (networkText) {
     }
     const l = st.leg, pl = plate(l.code, l.color, l.text), alight = pretty(l.alightPlace.name);
     if (st.type === 'wait') {
+      // Without live data, the app says when to stop waiting.
+      if (Date.now() - FOLLOW.stageAt > giveUpMin(st.leg) * 60000) {
+        showFollow(`El ${st.leg.code} está tardando`, `Llevas más de ${giveUpMin(st.leg)} min esperando. ${planB(st.leg).replace(/^./, c => c.toUpperCase())}.`, 'alert', plate(st.leg.code, st.leg.color, st.leg.text), `El ${spokenCode(st.leg.code)} está tardando.`);
+        $('fRecalc').hidden = false;
+        return;
+      }
       if (lat !== null) {
         const g = legProgress(l, lat, lon), dBoard = dist(lat, lon, E.lat[l.board], E.lon[l.board]);
         if (g.pos > l.bPos && dBoard > 200 && g.off < 250) { FOLLOW.i++; followStep(lat, lon); return; }
@@ -1387,7 +1481,10 @@ window.SVBoot = function (networkText) {
     // Always a fresh position: an old one could skip steps the rider has not done yet.
     const fresh = WEB ? await locate() : null;
     if (WEB && !fresh && state.gps) state.gps = null;
-    Object.assign(FOLLOW, { active: true, option, stages: buildStages(option), i: 0, warned: new Set(), arrived: null, said: null, onBoardSaid: null });
+    Object.assign(FOLLOW, { active: true, option, stages: buildStages(option), i: 0, warned: new Set(), arrived: null, said: null, onBoardSaid: null, seenStage: -1, stageAt: Date.now() });
+    // Waiting at a stop sends no GPS changes, so the screen also checks the time on its own.
+    clearInterval(FOLLOW.tick);
+    FOLLOW.tick = setInterval(() => { if (FOLLOW.active) followStep(state.gps && WEB ? state.gps.lat : null, state.gps && WEB ? state.gps.lon : null); }, 30000);
     openMap('follow', option);
     // The preview page has no GPS: the rider advances by hand, which still shows how the trip looks.
     $('fHint').textContent = WEB ? 'Deja la pantalla encendida para recibir el aviso de bajarte.' : 'Vista previa sin GPS: avanza con «Siguiente paso». La versión web te avisa sola cuándo bajarte.';
@@ -1409,6 +1506,7 @@ window.SVBoot = function (networkText) {
   async function requestWake() { try { if (navigator.wakeLock && FOLLOW.active) FOLLOW.wake = await navigator.wakeLock.request('screen'); } catch (e) { /* the rider keeps the screen on by hand */ } }
   function stopFollow() {
     FOLLOW.active = false;
+    clearInterval(FOLLOW.tick);
     Voice.stop();
     if (FOLLOW.watch !== null) navigator.geolocation.clearWatch(FOLLOW.watch);
     FOLLOW.watch = null;
@@ -1434,6 +1532,13 @@ window.SVBoot = function (networkText) {
     else if (t.dataset.goFav) { target = 'to'; choose({ ...state.favs[t.dataset.goFav], known: true }); }
     else if (t.dataset.goLast !== undefined) { target = 'to'; choose({ ...state.lastTo[+t.dataset.goLast], known: true }); }
     else if (t.dataset.legal) openLegal();
+    else if (t.dataset.help) openHelp();
+    else if (t.id === 'helpClose') $('helpSheet').hidden = true;
+    else if (t.id === 'installNow' && deferredInstall) { deferredInstall.prompt(); deferredInstall.userChoice.finally(() => { deferredInstall = null; openHelp(); }); }
+    else if (t.dataset.share !== undefined) shareTrip(lastOptions[+t.dataset.share]);
+    else if (t.dataset.routeCode) { state.routeView = t.dataset.routeCode; $('picker').hidden = true; state.formOpen = false; render(); window.scrollTo(0, 0); }
+    else if (t.dataset.routeClose) { state.routeView = null; render(); window.scrollTo(0, 0); }
+    else if (t.dataset.routeMap !== undefined) { const v = routeVariants(state.routeView)[+t.dataset.routeMap]; openMap('view', { routeView: true, legs: [routeLeg(v)] }); }
     else if (t.id === 'legalClose') $('legalSheet').hidden = true;
     else if (t.id === 'forgetBtn') forgetMe(t);
     else if (t.dataset.report !== undefined) openReport(lastOptions[+t.dataset.report]);
@@ -1476,7 +1581,7 @@ window.SVBoot = function (networkText) {
   $('pickerTitle').addEventListener('input', e => { pickerCat = null; renderPicker(e.target.value); });
   $('day').addEventListener('change', e => { state.day = +e.target.value; render(); });
   $('time').addEventListener('change', e => { if (e.target.value) { state.time = e.target.value; render(); } });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !FOLLOW.active) { if (!$('reportSheet').hidden) $('reportSheet').hidden = true; else if (!$('legalSheet').hidden) $('legalSheet').hidden = true; else if (!$('mapSheet').hidden) $('mapSheet').hidden = true; else if (!$('picker').hidden) { $('picker').hidden = true; state.savingFav = null; render(); } } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !FOLLOW.active) { if (!$('helpSheet').hidden) $('helpSheet').hidden = true; else if (!$('reportSheet').hidden) $('reportSheet').hidden = true; else if (!$('legalSheet').hidden) $('legalSheet').hidden = true; else if (!$('mapSheet').hidden) $('mapSheet').hidden = true; else if (!$('picker').hidden) { $('picker').hidden = true; state.savingFav = null; render(); } } });
   let deferredInstall = null;
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; $('installApp').hidden = false; });
 
@@ -1493,6 +1598,72 @@ window.SVBoot = function (networkText) {
       if (moved && $('picker').hidden && $('mapSheet').hidden) render();
     });
   });
+
+  // ---------- sharing ----------
+  // The link carries the two places, never the rider's exact position: "my location" becomes the nearest stop or station.
+  function shareablePlace(p) {
+    if (p.kind !== 'gps') return { name: p.name, lat: p.lat, lon: p.lon };
+    const st = nearestStation(p.lat, p.lon);
+    if (st.i >= 0 && st.m < 600) return { name: pretty(S.n[st.i]), lat: E.lat[st.i], lon: E.lon[st.i] };
+    const n = E.near(p.lat, p.lon, 600);
+    let best = -1, bd = 1e9;
+    for (let j = 0; j < n.length; j += 2) if (!S.k[n[j]] && E.atStop[n[j]].length && n[j + 1] < bd) { bd = n[j + 1]; best = n[j]; }
+    return best >= 0 ? { name: pretty(S.n[best]), lat: E.lat[best], lon: E.lon[best] } : { name: 'Cerca de ' + nearestLabel(p.lat, p.lon), lat: +p.lat.toFixed(3), lon: +p.lon.toFixed(3) };
+  }
+  const placeParam = p => `${p.lat.toFixed(5)},${p.lon.toFixed(5)},${encodeURIComponent(p.name)}`;
+  function tripLink() {
+    if (!WEB) return '';
+    const a = shareablePlace(state.from), b = shareablePlace(state.to);
+    return `${location.origin}${location.pathname}#de=${placeParam(a)}&a=${placeParam(b)}&max=${state.limit}`;
+  }
+  async function shareTrip(o) {
+    const rides = o.legs.filter(l => l.type === 'ride');
+    const from = shareablePlace(state.from).name, steps = rides.map((l, i) => `${i ? 'luego ' : ''}el ${l.code} en ${pretty(l.boardPlace.name)} y me bajo en ${pretty(l.alightPlace.name)}`).join(', ');
+    const text = `Voy de ${from} a ${state.to.name}: tomo ${steps}. Llego cerca de las ${clock(o.arrive)}`, url = tripLink();
+    try { if (navigator.share) { await navigator.share({ title: 'Mi viaje en Sin Vueltas', text, url: url || undefined }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+    const all = url ? `${text} ${url}` : text;
+    try { await navigator.clipboard.writeText(all); announce('Viaje copiado. Pégalo en WhatsApp o donde quieras.'); toast('Viaje copiado. Pégalo en WhatsApp o donde quieras.'); }
+    catch (e) { window.open(`https://wa.me/?text=${encodeURIComponent(all)}`, '_blank', 'noopener'); }
+  }
+  function toast(text) {
+    let t = $('toast');
+    if (!t) { t = document.createElement('p'); t.id = 'toast'; t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+    t.textContent = text; t.hidden = false;
+    clearTimeout(t._timer); t._timer = setTimeout(() => { t.hidden = true; }, 3500);
+  }
+  // Opening a shared link: the trip it names, as fixed places.
+  function openSharedTrip() {
+    const h = new URLSearchParams(location.hash.slice(1));
+    const read = v => { if (!v) return null; const [lat, lon, ...name] = v.split(','); const a = +lat, o = +lon; return isFinite(a) && isFinite(o) ? { kind: 'geo', station: -1, stop: -1, name: decodeURIComponent(name.join(',')) || 'Punto compartido', lat: a, lon: o } : null; };
+    const a = read(h.get('de')), b = read(h.get('a'));
+    if (!a || !b) return false;
+    state.from = a; state.to = b; state.fromGps = false; state.mode = 'now'; state.example = false;
+    if ([1, 2, 3].includes(+h.get('max'))) state.limit = +h.get('max');
+    history.replaceState(null, '', location.pathname + location.search);
+    return true;
+  }
+
+  // ---------- links from Google Maps, WhatsApp or plain coordinates ----------
+  function linkCoords(q) {
+    const text = String(q), tries = [/@(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/, /[?&](?:q|query|ll|destination|daddr|center)=(-?\d{1,2}\.\d+)(?:,|%2C)\s*(-?\d{1,3}\.\d+)/i, /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/, /^\s*(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})\s*$/];
+    for (const re of tries) {
+      const m = text.match(re);
+      if (!m) continue;
+      const lat = +m[1], lon = +m[2];
+      if (lat > 3.7 && lat < 4.95 && lon > -74.6 && lon < -73.85) return { kind: 'geo', station: -1, stop: -1, name: 'Punto del enlace', lat, lon };
+    }
+    return null;
+  }
+
+  // ---------- help: how the system works, and installing the app ----------
+  function openHelp() {
+    const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent), installed = window.matchMedia && matchMedia('(display-mode: standalone)').matches;
+    $('installSteps').innerHTML = installed ? '<p>Ya la tienes instalada.</p>'
+      : `${deferredInstall ? '<button type="button" class="btn primary wide" id="installNow">Instalar ahora</button>' : ''}
+      <p><b>${ios ? 'En iPhone, con Safari' : 'En Android, con Chrome'}:</b> ${ios ? 'toca el botón Compartir, el cuadro con la flecha hacia arriba, y luego «Agregar a inicio».' : 'toca el menú de los tres puntos y luego «Instalar app» o «Agregar a la pantalla principal».'}</p>
+      <p>${ios ? 'En Android, con Chrome: menú de los tres puntos y «Instalar app».' : 'En iPhone, con Safari: botón Compartir y «Agregar a inicio».'}</p>`;
+    $('helpSheet').hidden = false;
+  }
 
   // ---------- privacy, terms and error reports ----------
   const CONFIG = window.SV_CONFIG || {};
@@ -1563,7 +1734,7 @@ window.SVBoot = function (networkText) {
     announce([head.textContent, part('.big'), part('.arrive'), part('.price')].filter(Boolean).map(x => x.replace(/\.$/, '')).join('. '));
   }
   // Focus goes into a sheet when it opens and back where it was when it closes, and the page behind cannot be reached.
-  const SHEETS = [$('picker'), $('mapSheet'), $('legalSheet'), $('reportSheet')], shell = document.querySelector('.shell');
+  const SHEETS = [$('picker'), $('mapSheet'), $('legalSheet'), $('reportSheet'), $('helpSheet')], shell = document.querySelector('.shell');
   const openSheet = () => SHEETS.filter(s => !s.hidden).pop() || null;
   let topSheet = null, returnTo = null;
   function sheetsChanged() {
@@ -1574,7 +1745,7 @@ window.SVBoot = function (networkText) {
     shell.inert = !!top;
     if (top) shell.setAttribute('aria-hidden', 'true'); else shell.removeAttribute('aria-hidden');
     (top || document.body).appendChild($('announce'));
-    if (top) { ({ picker: $('pickerTitle'), mapSheet: $('mapTitle'), legalSheet: $('legalTitle'), reportSheet: $('reportTitle') })[top.id].focus(); return; }
+    if (top) { ({ picker: $('pickerTitle'), mapSheet: $('mapTitle'), legalSheet: $('legalTitle'), reportSheet: $('reportTitle'), helpSheet: $('helpTitle') })[top.id].focus(); return; }
     if (returnTo && returnTo.isConnected && returnTo.offsetParent !== null) returnTo.focus();
     else $('results').focus({ preventScroll: true });
   }
@@ -1596,7 +1767,10 @@ window.SVBoot = function (networkText) {
   if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', fitStrips);
 
   // First paint. Location is asked for only if the browser already has permission; otherwise the rider taps.
+  const shared = WEB && openSharedTrip();
   render();
+  // A shared link opened while the app is already on screen changes only the hash.
+  window.addEventListener('hashchange', () => { if (WEB && openSharedTrip()) { state.routeView = null; $('picker').hidden = true; $('mapSheet').hidden = true; render(); window.scrollTo(0, 0); } });
   setTimeout(checkForUpdate, 4000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); });
   if (WEB && navigator.geolocation && navigator.permissions && navigator.permissions.query) {
@@ -1604,6 +1778,7 @@ window.SVBoot = function (networkText) {
       if (p.state !== 'granted') return;
       // After hours away the current position is a better guess than the origin chosen back then.
       const stale = !!saved && !fresh;
+      if (shared) return;
       locate().then(g => { if (g && (stale || !state.from && state.fromGps || state.from && state.from.kind === 'gps')) { state.from = gpsPlace(); state.fromGps = true; } render(); });
     }).catch(() => {});
   }

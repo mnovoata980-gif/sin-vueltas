@@ -129,6 +129,7 @@
   </div>
   <div class="map-wrap">
     <div id="realMap" hidden></div>
+    <div class="center-pin" id="centerPin" hidden><svg viewBox="0 0 40 52" aria-hidden="true"><path d="M20 50s16-15.3 16-28A16 16 0 0 0 4 22c0 12.7 16 28 16 28z" fill="#d9202a" stroke="#ffffff" stroke-width="3"/><circle cx="20" cy="21" r="6" fill="#ffffff"/></svg></div>
     <canvas id="map" tabindex="0" aria-label="Mapa de estaciones y paraderos de Bogotá. Con el teclado: flechas para moverte, más y menos para acercar, Enter para elegir el centro."></canvas>
     <p class="map-tip" id="mapTip">Toca el punto que quieres. Acerca el mapa con los dedos.</p>
     <p class="map-loading" id="mapLoading" role="status" hidden>Cargando mapa de calles…</p>
@@ -202,6 +203,35 @@
       <li>La app se ofrece tal como está y sin garantía de que la información sea exacta o esté disponible.</li>
       <li>Mapa y direcciones: © colaboradores de OpenStreetMap, con licencia ODbL. Imágenes del mapa: OpenFreeMap y OpenMapTiles. Búsqueda: Photon.</li>
     </ul>
+  </div>
+</div>
+
+<div class="sheet" id="helpSheet" hidden role="dialog" aria-modal="true" aria-labelledby="helpTitle" style="z-index:45">
+  <div class="sheet-head">
+    <h3 id="helpTitle" tabindex="-1">Cómo funciona</h3>
+    <button type="button" class="icon-btn" id="helpClose" aria-label="Cerrar">
+      <svg width="20" height="20" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 3l12 12M15 3L3 15"/></svg>
+    </button>
+  </div>
+  <div class="list legal">
+    <h4>El sistema en pocas palabras</h4>
+    <ul>
+      <li><b>TransMilenio troncal</b>: buses por carriles exclusivos. Te subes dentro de una <b>estación</b>, pagando al entrar. En la app sus placas son rojas.</li>
+      <li><b>Portal</b>: la estación grande en la punta de cada troncal, donde también salen los alimentadores.</li>
+      <li><b>Vagón y puertas</b>: las estaciones se dividen en vagones con letra (A, B, C…). La app te dice, por ejemplo, «vagón C, puertas 2 o 5».</li>
+      <li><b>Alimentador</b>: bus que conecta barrios con un portal o una estación.</li>
+      <li><b>SITP zonal</b>: buses que andan por la calle y paran en paraderos. En la app sus placas son azules.</li>
+      <li><b>Tarjeta TuLlave personalizada</b>: la registras con tu documento. Con ella tienes hasta 2 transbordos sin costo en 125 minutos. Con una tarjeta sin personalizar pagas cada bus.</li>
+      <li><b>Transbordo</b>: cambiar de bus. Dentro de la misma estación no se paga de nuevo. Salir de una estación y entrar a otra sí se cobra.</li>
+    </ul>
+    <h4>Cómo leer un viaje</h4>
+    <ul>
+      <li>La barra de colores muestra el viaje a escala: gris es caminar, amarillo es esperar y cada color es un bus.</li>
+      <li>«Máximo de buses» limita los transbordos: con 1, solo ves rutas directas.</li>
+      <li>Los tiempos son programados, no en vivo. Si el bus tarda mucho, la app te dice cuándo dejar de esperar y qué otra ruta tomar.</li>
+    </ul>
+    <h4>Instalar la app</h4>
+    <div id="installSteps"></div>
   </div>
 </div>
 

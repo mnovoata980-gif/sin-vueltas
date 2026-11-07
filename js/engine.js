@@ -354,9 +354,12 @@
     // Ranks trips by what the rider said matters. Fewer buses is the default: that is the point of the app.
     // "Menos buses" must mean it: another bus only wins when it saves over 30 minutes.
     const WEIGHTS = { buses: { transfer: 1800, walk: 0.5 }, time: { transfer: 120, walk: 0 }, walk: { transfer: 300, walk: 10 } };
-    function score(o, pref) {
+    // From 9 p.m. to 5 a.m. walking and standing at a stop weigh more: the press names the night as the worst time for phone theft.
+    const isNight = t => { const h = ((t % 86400) + 86400) % 86400 / 3600; return h >= 21 || h < 5; };
+    function score(o, pref, night) {
       const w = WEIGHTS[pref] || WEIGHTS.buses;
       let s = o.total + (o.buses - 1) * w.transfer + o.walk * w.walk;
+      if (night) s += o.walk + o.wait * 0.5;
       for (const l of o.legs) if (l.type === 'ride') {
         if (l.hwAll > 1200) s += (l.hwAll - 1200) / 2; // rare buses are risky even if the estimate looks fine
         if (l.nearLast) s += 300;                       // missing the last bus strands the rider
@@ -370,8 +373,9 @@
       base.groups.filter(g => g.buses <= limit).forEach(g => g.options.forEach(add));
       // Offer shorter walks too, since the fastest trip at the rider's limit often uses all of it.
       if (maxWalk > 300) plan({ ...q, maxBuses: limit, maxWalk: 300 }).groups.forEach(g => g.options.forEach(add));
-      const ranked = [...seen.values()].sort((a, b) => score(a, pref) - score(b, pref));
-      return { ...base, ranked, fastest: ranked.length ? ranked.reduce((a, b) => (b.total < a.total ? b : a)) : null };
+      const night = isNight(q.time);
+      const ranked = [...seen.values()].sort((a, b) => score(a, pref, night) - score(b, pref, night));
+      return { ...base, ranked, night, fastest: ranked.length ? ranked.reduce((a, b) => (b.total < a.total ? b : a)) : null };
     }
 
     // Arrive by a given time: finds the latest departure that still makes it.
@@ -385,7 +389,7 @@
         let best = null, low = Infinity;
         for (let k = 1; k <= q.limit; k++) {
           const o = exact(q.from, q.to, q.day, t, k, q.maxWalk);
-          if (o && score(o, pref) < low) { low = score(o, pref); best = o; }
+          if (o && score(o, pref, isNight(target)) < low) { low = score(o, pref, isNight(target)); best = o; }
         }
         return best;
       };
