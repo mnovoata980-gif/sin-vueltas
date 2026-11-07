@@ -136,14 +136,22 @@
     <div class="zoom">
       <button type="button" class="icon-btn" id="zoomIn" aria-label="Acercar">+</button>
       <button type="button" class="icon-btn" id="zoomOut" aria-label="Alejar">−</button>
+      <button type="button" class="icon-btn" id="mapStyle" aria-pressed="false" aria-label="Cambiar a mapa oscuro"></button>
       <button type="button" class="icon-btn" id="zoomMe" aria-label="Ir a mi ubicación" hidden>
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="4"/><path d="M9 1v3M9 14v3M1 9h3M14 9h3"/></svg>
       </button>
     </div>
   </div>
   <div class="map-bar" id="mapBar">
-    <p id="mapChosen" aria-live="polite"></p>
-    <button type="button" class="btn primary" id="mapUse" hidden>Usar este punto</button>
+    <div class="map-info">
+      <p id="mapChosen" aria-live="polite"></p>
+      <p class="map-near" id="mapNear" hidden></p>
+      <a class="linkish" id="mapLook" href="#" target="_blank" rel="noopener" hidden>Ver fotos del lugar en Google Maps</a>
+    </div>
+    <div class="map-actions">
+      <button type="button" class="btn" id="mapNo" hidden>No, es otro</button>
+      <button type="button" class="btn primary" id="mapUse" hidden>Usar este punto</button>
+    </div>
   </div>
   <div class="follow" id="followBar" hidden>
     <div class="follow-main" role="status" aria-atomic="true">
@@ -179,6 +187,7 @@
       <li><b>Lo que escribes para buscar</b> una dirección o un lugar se envía al buscador Photon, de la empresa komoot, en Alemania. Nunca le enviamos tu ubicación.</li>
       <li><b>El mapa de calles</b> pide a OpenFreeMap las imágenes de la zona que estás viendo.</li>
       <li><b>Como cualquier página web</b>, los servicios que entregan la app y sus archivos ven la dirección IP de tu conexión: GitHub, que la aloja; Google Fonts, por la letra, salvo en modo ligero; y unpkg, por la librería del mapa. Cada uno aplica su propia política.</li>
+      <li><b>Si tocas «Ver fotos del lugar en Google Maps»</b>, Google recibe el punto que estás mirando en el mapa, no tu ubicación.</li>
       <li><b>Si reportas un error</b>, se envía lo que escribas y el resumen del viaje que ves antes de mandarlo. No incluye tu ubicación.</li>
     </ul>
     <p>No usamos cookies, publicidad ni estadísticas de uso, y no hay cuentas de usuario.</p>

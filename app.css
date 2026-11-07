@@ -278,8 +278,13 @@ h1, h2, h3, p { margin: 0; }
 .map-streets:active { transform: translate(-50%, 2px); }
 .map-tip { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); top: .75rem; right: 4.5rem; background: var(--surface); border-radius: .75rem; box-shadow: var(--shadow); padding: .4375rem .625rem; font-size: var(--small); color: var(--muted); }
 .map-bar { padding-block: .625rem .75rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; gap: .625rem; align-items: center; justify-content: space-between; background: var(--surface); }
-.map-bar p { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
-.map-bar .btn { flex: none; white-space: nowrap; }
+.map-bar { flex-wrap: wrap; }
+.map-info { flex: 1 1 14rem; min-width: 0; display: grid; gap: .125rem; }
+.map-bar #mapChosen { font-weight: 600; overflow-wrap: anywhere; }
+.map-near { color: var(--muted); font-size: var(--small); }
+.map-info .linkish { min-height: 2.75rem; }
+.map-actions { flex: 1 1 auto; display: flex; gap: .5rem; justify-content: flex-end; }
+.map-actions .btn { flex: 1 1 auto; white-space: nowrap; }
 
 /* Trip mode: one instruction, big enough to read with a glance. Yellow means "get ready", green means "you made it". */
 .follow { padding-block: .875rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: .625rem; background: var(--surface); }

@@ -229,7 +229,7 @@ window.SVBoot = function (networkText) {
     fromGps: saved ? !!saved.fromGps : WEB,
     limit: saved && saved.limit || 2, walk: saved && saved.walk || 10, pref: saved && saved.pref || 'buses',
     card: saved && saved.card || 'unknown', voice: !(saved && saved.voice === false),
-    lite: saved && saved.lite || 'auto', glance: !(saved && saved.glance === false),
+    lite: saved && saved.lite || 'auto', glance: !(saved && saved.glance === false), mapDark: !!(saved && saved.mapDark),
     mode: 'now', day: 0, time: '08:00', example: false,
     lastTo: (saved && saved.lastTo || []).map(rehydrate),
     recent: (saved && saved.recent || []).map(r => ({ key: r.key, from: rehydrate(r.from), to: rehydrate(r.to) })),
@@ -240,7 +240,7 @@ window.SVBoot = function (networkText) {
   const persist = () => {
     if (state.example) return;
     const slim = p => (p && p.kind !== 'gps' ? plain(p) : null);
-    store.set(SAVE, { at: Date.now(), from: slim(state.from), to: slim(state.to), fromGps: state.from ? state.from.kind === 'gps' : state.fromGps, limit: state.limit, walk: state.walk, pref: state.pref, card: state.card, voice: state.voice, lite: state.lite, glance: state.glance,
+    store.set(SAVE, { at: Date.now(), from: slim(state.from), to: slim(state.to), fromGps: state.from ? state.from.kind === 'gps' : state.fromGps, limit: state.limit, walk: state.walk, pref: state.pref, card: state.card, voice: state.voice, lite: state.lite, glance: state.glance, mapDark: state.mapDark,
       lastTo: state.lastTo.map(plain), recent: state.recent.map(r => ({ key: r.key, from: plain(r.from), to: plain(r.to) })), favs: { casa: slim(state.favs.casa), trabajo: slim(state.favs.trabajo) } });
   };
   // Light mode: the head script reads the phone's signals, and the rider can override them from the footer.
@@ -836,12 +836,59 @@ window.SVBoot = function (networkText) {
     }
     $('mapChosen').textContent = MAP.picked.name;
     $('mapUse').hidden = false;
-    $('mapUse').textContent = 'Usar este punto';
+    $('mapUse').textContent = MAP.mode === 'confirm' ? 'Sí, es aquí' : 'Usar este punto';
+    showPlaceHelp(MAP.picked);
     refreshMapData();
   }
 
   // --- real map ---
   const tok = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  // The map has its own light or dark look, chosen on the map itself. Light by default, even on a dark phone: the dark
+  // street map hides street names and places, and the map is where people check that a place is the right one.
+  const MAP_LOOK = {
+    light: { style: 'liberty', bg: '#eef1f6', line: '#2b3a63', dot: '#7d89a8', text: '#10192e', halo: '#ffffff', surface: '#ffffff', muted: '#4f5b78' },
+    dark: { style: 'dark', bg: '#111a3a', line: '#c5d0ee', dot: '#5d6a91', text: '#eef2ff', halo: '#111a3a', surface: '#182145', muted: '#a9b5d6' },
+  };
+  const look = () => MAP_LOOK[state.mapDark ? 'dark' : 'light'];
+  const PIN = '#d9202a';
+  function renderMapLook() {
+    const b = $('mapStyle');
+    b.setAttribute('aria-pressed', String(state.mapDark));
+    b.setAttribute('aria-label', state.mapDark ? 'Cambiar a mapa claro' : 'Cambiar a mapa oscuro');
+    b.innerHTML = state.mapDark
+      ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>'
+      : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>';
+    document.querySelector('.map-wrap').style.background = look().bg;
+  }
+  function setMapLook(dark) {
+    state.mapDark = dark; persist(); renderMapLook();
+    if (RM.map && RM.ready) {
+      RM.ready = false;
+      RM.map.setStyle(`https://tiles.openfreemap.org/styles/${look().style}`, { diff: false });
+      RM.map.once('style.load', () => { addRealLayers(); RM.ready = true; refreshMapData(); });
+    }
+    if (!$('map').hidden) draw();
+  }
+  // Landmarks that help someone who does not know the area tell whether this is the place.
+  function nearText(p) {
+    const out = [];
+    if (p.kind !== 'station') {
+      const st = nearestStation(p.lat, p.lon);
+      if (st.i >= 0 && st.m < 3000) out.push(`A ${distLabel(st.m)} de la estación ${pretty(S.n[st.i])}`);
+    }
+    const n = E.near(p.lat, p.lon, 500);
+    let best = -1, bd = 1e9;
+    for (let j = 0; j < n.length; j += 2) { const i = n[j]; if (!S.k[i] && S.p[i] < 0 && E.atStop[i].length && n[j + 1] < bd) { bd = n[j + 1]; best = i; } }
+    if (best >= 0 && pretty(S.n[best]) !== p.name) out.push(`paradero ${pretty(S.n[best])} a ${distLabel(bd)}`);
+    return out.join(' · ');
+  }
+  function showPlaceHelp(p) {
+    $('mapNear').textContent = p ? nearText(p) : '';
+    $('mapNear').hidden = !p;
+    const look2 = $('mapLook');
+    look2.hidden = !p;
+    if (p) look2.href = `https://www.google.com/maps/search/?api=1&query=${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;
+  }
   const isDark = () => { const t = document.documentElement.getAttribute('data-theme'); return t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches; };
   const fc = features => ({ type: 'FeatureCollection', features });
   const pt = (lat, lon, props) => ({ type: 'Feature', properties: props || {}, geometry: { type: 'Point', coordinates: [lon, lat] } });
@@ -849,7 +896,7 @@ window.SVBoot = function (networkText) {
   function initReal(done) {
     if (RM.map) { RM.map.resize(); if (RM.ready) done(); else RM.after = done; return; }
     try {
-      RM.map = new maplibregl.Map({ container: 'realMap', style: `https://tiles.openfreemap.org/styles/${isDark() ? 'dark' : 'positron'}`, center: [-74.09, 4.65], zoom: 10.4, dragRotate: false, pitchWithRotate: false, attributionControl: false });
+      RM.map = new maplibregl.Map({ container: 'realMap', style: `https://tiles.openfreemap.org/styles/${look().style}`, center: [-74.09, 4.65], zoom: 10.4, dragRotate: false, pitchWithRotate: false, attributionControl: false });
       RM.map.addControl(new maplibregl.AttributionControl({ compact: true }));
       RM.map.touchZoomRotate.disableRotation();
       // The library already moves and zooms with the keyboard. Enter chooses the point in the middle.
@@ -881,18 +928,20 @@ window.SVBoot = function (networkText) {
     m.addSource('tripPts', { type: 'geojson', data: fc([]) });
     m.addSource('picked', { type: 'geojson', data: fc([]) });
     m.addSource('me', { type: 'geojson', data: fc([]) });
-    const font = ['Noto Sans Regular'], text = tok('--map-text'), halo = tok('--map-halo');
-    m.addLayer({ id: 'corridors', type: 'line', source: 'corridors', paint: { 'line-color': tok('--map-line'), 'line-opacity': .5, 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 15, 4] }, layout: { 'line-cap': 'round' } });
-    m.addLayer({ id: 'stops', type: 'circle', source: 'stops', minzoom: 13.5, paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 13.5, 2, 17, 5], 'circle-color': tok('--map-dot'), 'circle-stroke-color': halo, 'circle-stroke-width': 1 } });
+    const L = look(), font = ['Noto Sans Regular'], text = L.text, halo = L.halo;
+    m.addLayer({ id: 'corridors', type: 'line', source: 'corridors', paint: { 'line-color': L.line, 'line-opacity': .5, 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 15, 4] }, layout: { 'line-cap': 'round' } });
+    m.addLayer({ id: 'stops', type: 'circle', source: 'stops', minzoom: 13.5, paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 13.5, 2, 17, 5], 'circle-color': L.dot, 'circle-stroke-color': halo, 'circle-stroke-width': 1 } });
     m.addLayer({ id: 'trip-walk', type: 'line', source: 'trip', filter: ['==', ['get', 'walk'], 1], paint: { 'line-color': text, 'line-width': 3, 'line-dasharray': [0.5, 2] }, layout: { 'line-cap': 'round' } });
     m.addLayer({ id: 'trip-ride', type: 'line', source: 'trip', filter: ['!=', ['get', 'walk'], 1], paint: { 'line-color': ['get', 'color'], 'line-width': 6 }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
-    m.addLayer({ id: 'stations', type: 'circle', source: 'stations', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2.5, 15, 6], 'circle-color': tok('--surface'), 'circle-stroke-color': tok('--map-line'), 'circle-stroke-width': 2 } });
-    m.addLayer({ id: 'trip-pts', type: 'circle', source: 'tripPts', paint: { 'circle-radius': 7, 'circle-color': tok('--surface'), 'circle-stroke-color': text, 'circle-stroke-width': 3 } });
-    m.addLayer({ id: 'stops-label', type: 'symbol', source: 'stops', minzoom: 16, layout: { 'text-field': ['get', 'name'], 'text-font': font, 'text-size': 11, 'text-anchor': 'left', 'text-offset': [.7, 0], 'text-optional': true }, paint: { 'text-color': tok('--muted'), 'text-halo-color': halo, 'text-halo-width': 1.5 } });
+    m.addLayer({ id: 'stations', type: 'circle', source: 'stations', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2.5, 15, 6], 'circle-color': L.surface, 'circle-stroke-color': L.line, 'circle-stroke-width': 2 } });
+    m.addLayer({ id: 'trip-pts', type: 'circle', source: 'tripPts', paint: { 'circle-radius': 7, 'circle-color': L.surface, 'circle-stroke-color': text, 'circle-stroke-width': 3 } });
+    m.addLayer({ id: 'stops-label', type: 'symbol', source: 'stops', minzoom: 16, layout: { 'text-field': ['get', 'name'], 'text-font': font, 'text-size': 11, 'text-anchor': 'left', 'text-offset': [.7, 0], 'text-optional': true }, paint: { 'text-color': L.muted, 'text-halo-color': halo, 'text-halo-width': 1.5 } });
     m.addLayer({ id: 'stations-label', type: 'symbol', source: 'stations', minzoom: 12, layout: { 'text-field': ['get', 'name'], 'text-font': font, 'text-size': 12, 'text-anchor': 'left', 'text-offset': [.8, 0] }, paint: { 'text-color': text, 'text-halo-color': halo, 'text-halo-width': 1.5 } });
     m.addLayer({ id: 'portals-label', type: 'symbol', source: 'stations', maxzoom: 12, filter: ['==', ['get', 'portal'], 1], layout: { 'text-field': ['get', 'name'], 'text-font': font, 'text-size': 12, 'text-anchor': 'left', 'text-offset': [.8, 0] }, paint: { 'text-color': text, 'text-halo-color': halo, 'text-halo-width': 1.5 } });
     m.addLayer({ id: 'trip-label', type: 'symbol', source: 'tripPts', layout: { 'text-field': ['get', 'name'], 'text-font': font, 'text-size': 13, 'text-variable-anchor': ['left', 'right', 'top', 'bottom'], 'text-radial-offset': 1, 'text-justify': 'auto', 'text-allow-overlap': true }, paint: { 'text-color': text, 'text-halo-color': halo, 'text-halo-width': 2 } });
-    m.addLayer({ id: 'picked', type: 'circle', source: 'picked', paint: { 'circle-radius': 10, 'circle-color': tok('--sign'), 'circle-stroke-color': text, 'circle-stroke-width': 3 } });
+    m.addLayer({ id: 'picked-ring', type: 'circle', source: 'picked', paint: { 'circle-radius': 24, 'circle-color': PIN, 'circle-opacity': .18 } });
+    m.addLayer({ id: 'picked', type: 'circle', source: 'picked', paint: { 'circle-radius': 11, 'circle-color': PIN, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 4 } });
+    m.addLayer({ id: 'picked-label', type: 'symbol', source: 'picked', layout: { 'text-field': ['get', 'name'], 'text-font': ['Noto Sans Bold'], 'text-size': 15, 'text-anchor': 'top', 'text-offset': [0, 1.4], 'text-max-width': 14, 'text-allow-overlap': true, 'text-ignore-placement': true }, paint: { 'text-color': text, 'text-halo-color': halo, 'text-halo-width': 2.5 } });
     m.addLayer({ id: 'me', type: 'circle', source: 'me', paint: { 'circle-radius': 8, 'circle-color': tok('--me'), 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } });
   }
   // ---------- route updates ----------
@@ -996,7 +1045,7 @@ window.SVBoot = function (networkText) {
       const m = RM.map, g = MAP.option ? tripGeo(MAP.option) : { lines: [], points: [] };
       m.getSource('trip').setData(fc(g.lines));
       m.getSource('tripPts').setData(fc(g.points));
-      m.getSource('picked').setData(fc(MAP.picked ? [pt(MAP.picked.lat, MAP.picked.lon)] : []));
+      m.getSource('picked').setData(fc(MAP.picked ? [pt(MAP.picked.lat, MAP.picked.lon, { name: MAP.picked.name.length > 40 ? MAP.picked.name.slice(0, 38) + '…' : MAP.picked.name })] : []));
       m.getSource('me').setData(fc(MAP.me ? [pt(MAP.me.lat, MAP.me.lon)] : []));
     } else queueDraw();
   }
@@ -1007,7 +1056,7 @@ window.SVBoot = function (networkText) {
       const g = tripGeo(MAP.option), b = new maplibregl.LngLatBounds();
       g.lines.forEach(l => l.geometry.coordinates.forEach(c => b.extend(c)));
       m.fitBounds(b, { padding: pad, duration: 0, maxZoom: 15.5 });
-    } else if (MAP.picked) m.jumpTo({ center: [MAP.picked.lon, MAP.picked.lat], zoom: MAP.mode === 'confirm' ? 15.5 : Math.max(m.getZoom(), 14.5) });
+    } else if (MAP.picked) m.jumpTo({ center: [MAP.picked.lon, MAP.picked.lat], zoom: MAP.mode === 'confirm' ? 16.3 : Math.max(m.getZoom(), 15) });
     else if (MAP.me) m.jumpTo({ center: [MAP.me.lon, MAP.me.lat], zoom: 14.5 });
     else m.jumpTo({ center: [-74.09, 4.65], zoom: 10.4 });
     refreshMapData();
@@ -1050,14 +1099,15 @@ window.SVBoot = function (networkText) {
   function draw() {
     const c = $('map'), g = c.getContext('2d');
     const W = MAP.w, H = MAP.h, s = MAP.scale;
-    g.clearRect(0, 0, W, H); g.fillStyle = tok('--map-bg'); g.fillRect(0, 0, W, H);
+    const L = look();
+    g.clearRect(0, 0, W, H); g.fillStyle = L.bg; g.fillRect(0, 0, W, H);
     const inView = (x, y) => x > -30 && x < W + 30 && y > -30 && y < H + 30;
     if (s > 0.012) {
-      g.fillStyle = tok('--map-dot');
+      g.fillStyle = L.dot;
       const r = s > 0.12 ? 3 : s > 0.05 ? 2 : 1;
       for (const i of usedStops) { const x = sx(mx[i]), y = sy(my[i]); if (inView(x, y)) g.fillRect(x - r / 2, y - r / 2, r, r); }
     }
-    g.strokeStyle = tok('--map-line'); g.globalAlpha = MAP.option ? .35 : 1; g.lineWidth = s > 0.05 ? 3 : 2; g.lineCap = 'round';
+    g.strokeStyle = L.line; g.globalAlpha = MAP.option ? .35 : 1; g.lineWidth = s > 0.05 ? 3 : 2; g.lineCap = 'round';
     g.beginPath();
     for (let i = 0; i < corridors.length; i += 2) { const a = corridors[i], b = corridors[i + 1]; g.moveTo(sx(mx[a]), sy(my[a])); g.lineTo(sx(mx[b]), sy(my[b])); }
     g.stroke(); g.globalAlpha = 1;
@@ -1067,7 +1117,7 @@ window.SVBoot = function (networkText) {
           g.strokeStyle = l.color; g.lineWidth = 6; g.setLineDash([]); g.lineJoin = 'round';
           g.beginPath(); rideLine(l).forEach((p, i) => { const x = sx(toX(p[1])), y = sy(toY(p[0])); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
         } else if (l.fromStop !== undefined) {
-          g.strokeStyle = tok('--map-text'); g.lineWidth = 2.5; g.setLineDash([2, 6]);
+          g.strokeStyle = L.text; g.lineWidth = 2.5; g.setLineDash([2, 6]);
           g.beginPath(); g.moveTo(sx(mx[l.fromStop]), sy(my[l.fromStop])); g.lineTo(sx(mx[l.toStop]), sy(my[l.toStop])); g.stroke(); g.setLineDash([]);
         }
       }
@@ -1079,14 +1129,14 @@ window.SVBoot = function (networkText) {
       const w = g.measureText(t).width, cols = [], cx0 = Math.floor(x / 40), cx1 = Math.floor((x + 8 + w) / 40), cy = Math.floor(y / 16);
       for (let a = cx0; a <= cx1; a++) for (let b = cy - 1; b <= cy + 1; b++) { const k = a + ':' + b; if (occ.has(k)) return; cols.push(k); }
       cols.forEach(k => occ.add(k));
-      g.lineWidth = 3; g.strokeStyle = tok('--map-halo'); g.strokeText(t, x + 8, y); g.fillStyle = tok(strong ? '--map-text' : '--muted'); g.fillText(t, x + 8, y);
+      g.lineWidth = 3; g.strokeStyle = L.halo; g.strokeText(t, x + 8, y); g.fillStyle = strong ? L.text : L.muted; g.fillText(t, x + 8, y);
     };
     if (MAP.option) {
       const dots = [];
       MAP.option.legs.forEach(l => { if (l.type === 'ride') { dots.push([l.board, l.boardPlace.name]); dots.push([l.alight, l.alightPlace.name]); } });
       dots.forEach(([v, name]) => {
         const x = sx(mx[v]), y = sy(my[v]);
-        g.beginPath(); g.arc(x, y, 6, 0, 7); g.fillStyle = tok('--surface'); g.fill(); g.lineWidth = 3; g.strokeStyle = tok('--map-text'); g.stroke();
+        g.beginPath(); g.arc(x, y, 6, 0, 7); g.fillStyle = L.surface; g.fill(); g.lineWidth = 3; g.strokeStyle = L.text; g.stroke();
         label(x, y, pretty(name), true);
       });
     }
@@ -1094,14 +1144,18 @@ window.SVBoot = function (networkText) {
       const x = sx(mx[i]), y = sy(my[i]);
       if (!inView(x, y)) continue;
       const big = /^Portal/.test(S.n[i]);
-      g.beginPath(); g.arc(x, y, big ? 5 : s > 0.05 ? 4 : 2.5, 0, 7); g.fillStyle = tok('--surface'); g.fill(); g.lineWidth = 2; g.strokeStyle = tok('--map-line'); g.stroke();
+      g.beginPath(); g.arc(x, y, big ? 5 : s > 0.05 ? 4 : 2.5, 0, 7); g.fillStyle = L.surface; g.fill(); g.lineWidth = 2; g.strokeStyle = L.line; g.stroke();
     }
     for (const i of stationsServed) if (/^Portal/.test(S.n[i])) label(sx(mx[i]), sy(my[i]), pretty(S.n[i]), true);
     if (s > 0.03) for (const i of stationsServed) label(sx(mx[i]), sy(my[i]), pretty(S.n[i]), true);
     if (s > 0.3) for (const i of usedStops) label(sx(mx[i]), sy(my[i]), pretty(S.n[i]), false);
     if (MAP.picked) {
       const x = sx(toX(MAP.picked.lon)), y = sy(toY(MAP.picked.lat));
-      g.beginPath(); g.arc(x, y, 9, 0, 7); g.fillStyle = tok('--sign'); g.fill(); g.lineWidth = 3; g.strokeStyle = tok('--map-text'); g.stroke();
+      g.beginPath(); g.arc(x, y, 22, 0, 7); g.fillStyle = PIN; g.globalAlpha = .18; g.fill(); g.globalAlpha = 1;
+      g.beginPath(); g.arc(x, y, 11, 0, 7); g.fillStyle = PIN; g.fill(); g.lineWidth = 4; g.strokeStyle = '#ffffff'; g.stroke();
+      g.font = '700 14px Rubik, "Segoe UI", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top';
+      g.lineWidth = 4; g.strokeStyle = L.halo; g.strokeText(MAP.picked.name.slice(0, 40), x, y + 18); g.fillStyle = L.text; g.fillText(MAP.picked.name.slice(0, 40), x, y + 18);
+      g.textAlign = 'start'; g.textBaseline = 'middle';
     }
     if (MAP.me) {
       const x = sx(toX(MAP.me.lon)), y = sy(toY(MAP.me.lat));
@@ -1167,7 +1221,10 @@ window.SVBoot = function (networkText) {
     $('mapClose').hidden = mode === 'follow';
     $('mapUse').hidden = !confirming;
     $('mapUse').textContent = 'Sí, es aquí';
+    $('mapNo').hidden = !confirming;
     $('mapChosen').textContent = confirming ? [place.name, place.sub].filter(Boolean).join(' · ') : 'Toca el mapa para elegir un punto';
+    showPlaceHelp(confirming ? place : null);
+    renderMapLook();
     $('zoomMe').hidden = !WEB;
     // The glance screen has no map, so nothing is downloaded until the rider asks for one.
     const glance = mode === 'follow' && state.glance;
@@ -1401,7 +1458,8 @@ window.SVBoot = function (networkText) {
     else if (t.id === 'useGps') useMyLocation(target);
     else if (t.id === 'swap') { const a = state.from; state.from = state.to; state.to = a; persist(); render(); }
     else if (t.id === 'pickerClose') { $('picker').hidden = true; state.savingFav = null; render(); }
-    else if (t.id === 'mapClose') $('mapSheet').hidden = true;
+    else if (t.id === 'mapClose' || t.id === 'mapNo') $('mapSheet').hidden = true;
+    else if (t.id === 'mapStyle') setMapLook(!state.mapDark);
     else if (t.id === 'zoomIn') { if (!$('map').hidden) zoomCanvas(1.5, MAP.w / 2, MAP.h / 2); else if (RM.map) RM.map.zoomIn(); }
     else if (t.id === 'zoomOut') { if (!$('map').hidden) zoomCanvas(1 / 1.5, MAP.w / 2, MAP.h / 2); else if (RM.map) RM.map.zoomOut(); }
     else if (t.id === 'zoomMe') {
