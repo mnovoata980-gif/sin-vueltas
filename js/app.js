@@ -661,27 +661,45 @@ window.SVBoot = function (networkText) {
 
   // ---------- one route, all of it ----------
   // Every stretch of every pattern that shows this code, keeping the busiest one for each destination.
+  // Many zonal routes are one trip in the file that goes out and comes back to where it started (the 593 leaves Bosa,
+  // reaches Chicó and returns). Shown whole, the way out and the way back look like one line. When the sign does not
+  // change halfway, the turn is the stop farthest from the start: everything before it is the way out, the rest the way back.
+  function loopTurn(p, from, to) {
+    const s = p.stops, a = s[from];
+    if (to - from < 6 || dist(E.lat[a], E.lon[a], E.lat[s[to]], E.lon[s[to]]) > 800) return -1;
+    let turn = -1, far = 0;
+    for (let k = from + 1; k < to; k++) { const m = dist(E.lat[a], E.lon[a], E.lat[s[k]], E.lon[s[k]]); if (m > far) { far = m; turn = k; } }
+    return far > 1500 && turn - from >= 2 && to - turn >= 2 ? turn : -1;
+  }
   function routeVariants(code) {
     const day = currentQuery().day, byDest = new Map();
+    const keep = v => {
+      const old = byDest.get(v.dest);
+      if (!old || v.trips > old.trips || (v.trips === old.trips && v.to - v.from > old.to - old.from)) byDest.set(v.dest, v);
+    };
     E.P.forEach((p, pat) => {
       const signs = [[0, p.code, p.dest], ...(p.signs || [])];
       signs.forEach(([from, c, dest], k) => {
         if (c !== code) return;
         const to = k + 1 < signs.length ? signs[k + 1][0] - 1 : p.stops.length - 1;
         if (to <= from) return;
-        const trips = p.cnt[day].reduce((a, b) => a + b, 0), v = { pat, from, to, dest, trips };
-        const old = byDest.get(dest);
-        if (!old || trips > old.trips || (trips === old.trips && to - from > old.to - old.from)) byDest.set(dest, v);
+        const trips = p.cnt[day].reduce((a, b) => a + b, 0), turn = loopTurn(p, from, to);
+        if (turn < 0) { keep({ pat, from, to, dest, trips }); return; }
+        keep({ pat, from, to: turn, dest: E.place(p.stops[turn]).name, trips, part: 'ida', order: 0 });
+        keep({ pat, from: turn, to, dest: E.place(p.stops[to]).name, trips, part: 'regreso', order: 1 });
       });
     });
-    return [...byDest.values()].sort((a, b) => b.trips - a.trips);
+    // The way out goes before the way back; otherwise the busiest direction goes first.
+    return [...byDest.values()].sort((a, b) => b.trips - a.trips || (a.order || 0) - (b.order || 0));
   }
   const codeIndex = (() => { const m = new Map(); E.P.forEach(p => [p.code, ...(p.signs || []).map(x => x[1])].forEach(c => m.set(c.toUpperCase().replace(/\s+/g, ''), c))); return m; })();
   const routeCodesFor = q => { const k = q.toUpperCase().replace(/\s+/g, ''); return k.length >= 1 && codeIndex.has(k) ? [codeIndex.get(k)] : []; };
   const fromMid = (p, pos, sec) => sec + p.cum[pos];
-  function routeLeg(v) {
+  // Each direction of a route gets its own color, the same on the map and on its card.
+  const dirTitle = v => (v.part === 'ida' ? 'Ida · hacia ' : v.part === 'regreso' ? 'Regreso · hacia ' : 'Hacia ') + pretty(v.dest);
+  function routeLeg(v, dir) {
     const p = E.P[v.pat], r = E.routes[p.route];
-    return { type: 'ride', pat: v.pat, bPos: v.from, aPos: v.to, board: p.stops[v.from], alight: p.stops[v.to], code: state.routeView, dest: v.dest, color: '#' + r[2], text: '#' + r[3], boardPlace: E.place(p.stops[v.from]), alightPlace: E.place(p.stops[v.to]) };
+    return { type: 'ride', pat: v.pat, bPos: v.from, aPos: v.to, board: p.stops[v.from], alight: p.stops[v.to], code: state.routeView, dest: v.dest, dir, dirTitle: dirTitle(v), color: '#' + r[2], text: '#' + r[3], boardPlace: E.place(p.stops[v.from]), alightPlace: E.place(p.stops[v.to]) };
   }
   function routeHtml(code) {
     const vs = routeVariants(code), q = currentQuery(), h = Math.floor(q.time / 3600);
@@ -695,8 +713,8 @@ window.SVBoot = function (networkText) {
       const names = stops.map(s => pretty(E.place(s).name));
       // Each stop is a button: it lists the other routes that stop there, so a rider can plan a transfer by hand.
       const rows = stops.map((s, k) => `<li class="${S.p[s] >= 0 ? 'is-station' : 'is-stop'}"><button type="button" class="stop-link" data-stop-at="${s}">${esc(names[k])}</button></li>`).join('');
-      return `<article class="card route-card"><div class="card-main">
-        <h3 class="group-title">Hacia ${esc(pretty(v.dest))}</h3>
+      return `<article class="card route-card" style="--dir:var(--dir-${(i % DIR_COUNT) + 1})"><div class="card-main">
+        <h3 class="group-title dir-title"><i class="dir-swatch" aria-hidden="true"></i>${esc(dirTitle(v))}</h3>
         <p class="meta">${stops.length} paradas · ${runMin} min de punta a punta · de ${esc(names[0])} a ${esc(names[names.length - 1])}</p>
         ${service}
         <div class="card-actions route-actions"><button type="button" class="btn" data-route-map="${i}">${icon('map')}Ver en el mapa</button></div>
@@ -706,7 +724,8 @@ window.SVBoot = function (networkText) {
       </div></article>`;
     }).join('');
     const back = state.routeFrom === 'routes' ? 'Volver a las rutas' : 'Volver';
-    return `<div class="verdict"><h2>Ruta ${plate(code, '#' + r0[2], '#' + r0[3])}</h2><p>${esc(SVC[r0[4]] || 'Bus')} · ${vs.length === 1 ? '1 sentido' : `${vs.length} sentidos`}. Horarios programados del ${dayLabel(net.meta.feed)}.</p><button type="button" class="linkish" data-route-close="1">${back}</button></div>${cards}${fineHtml()}`;
+    const loop = vs.some(v => v.part) ? ' Sale y vuelve al mismo lugar: la ida y el regreso tienen colores distintos.' : vs.length > 1 ? ' Cada sentido tiene su color, también en el mapa.' : '';
+    return `<div class="verdict"><h2>Ruta ${plate(code, '#' + r0[2], '#' + r0[3])}</h2><p>${esc(SVC[r0[4]] || 'Bus')} · ${vs.length === 1 ? '1 sentido' : `${vs.length} sentidos`}.${loop} Horarios programados del ${dayLabel(net.meta.feed)}.</p><button type="button" class="linkish" data-route-close="1">${back}</button></div>${cards}${fineHtml()}`;
   }
 
   // ---------- «Rutas»: every route, searchable by code, destination or station ----------
@@ -1035,9 +1054,12 @@ window.SVBoot = function (networkText) {
   // The map has its own light or dark look, chosen on the map itself. Light by default, even on a dark phone: the dark
   // street map hides street names and places, and the map is where people check that a place is the right one.
   const MAP_LOOK = {
-    light: { style: 'liberty', bg: '#eef1f6', line: '#2b3a63', dot: '#7d89a8', text: '#10192e', halo: '#ffffff', surface: '#ffffff', muted: '#4f5b78' },
-    dark: { style: 'dark', bg: '#111a3a', line: '#c5d0ee', dot: '#5d6a91', text: '#eef2ff', halo: '#111a3a', surface: '#182145', muted: '#a9b5d6' },
+    light: { style: 'liberty', bg: '#eef1f6', line: '#2b3a63', dot: '#7d89a8', text: '#10192e', halo: '#ffffff', surface: '#ffffff', muted: '#4f5b78', casing: '#10192e', dirs: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'] },
+    dark: { style: 'dark', bg: '#111a3a', line: '#c5d0ee', dot: '#5d6a91', text: '#eef2ff', halo: '#111a3a', surface: '#182145', muted: '#a9b5d6', casing: '#05081a', dirs: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300'] },
   };
+  // Directions of one route: colors checked for color blindness on both map looks (also in app.css as --dir-1 to --dir-6).
+  const DIR_COUNT = 6;
+  const legColor = l => (l.dir !== undefined ? look().dirs[l.dir % DIR_COUNT] : l.color);
   const look = () => MAP_LOOK[state.mapDark ? 'dark' : 'light'];
   const PIN = '#d9202a';
   function renderMapLook() {
@@ -1049,8 +1071,16 @@ window.SVBoot = function (networkText) {
       : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>';
     document.querySelector('.map-wrap').style.background = look().bg;
   }
+  // Under a route's map: which color is which direction, with the arrow that shows the way.
+  function renderLegend() {
+    const box = $('mapLegend'), o = MAP.option;
+    if (!o || !o.routeView || MAP.mode !== 'view') { box.hidden = true; box.innerHTML = ''; return; }
+    const legs = [...o.legs].sort((a, b) => a.dir - b.dir);
+    box.innerHTML = legs.map(l => `<li><svg viewBox="0 0 28 12" aria-hidden="true"><path d="M2 6h24" stroke="${legColor(l)}" stroke-width="5" stroke-linecap="round"/><path d="M11 2.5l6 3.5-6 3.5" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${esc(l.dirTitle)}</span></li>`).join('');
+    box.hidden = false;
+  }
   function setMapLook(dark) {
-    state.mapDark = dark; persist(); renderMapLook();
+    state.mapDark = dark; persist(); renderMapLook(); renderLegend();
     if (RM.map && RM.ready) {
       RM.ready = false;
       RM.map.setStyle(`https://tiles.openfreemap.org/styles/${look().style}`, { diff: false });
@@ -1109,6 +1139,17 @@ window.SVBoot = function (networkText) {
     RM.map.on('moveend', e => { if (MAP.mode === 'pick' && e.originalEvent) { const c = RM.map.getCenter(); pickGeo(c.lat, c.lng, 78271.5 * Math.cos(c.lat * Math.PI / 180) / Math.pow(2, RM.map.getZoom())); } });
     RM.map.on('click', e => { if (MAP.mode === 'pick') RM.map.easeTo({ center: e.lngLat, duration: 300 }); if (MAP.mode === 'pick' || MAP.mode === 'confirm') { const z = RM.map.getZoom(), mpp = 78271.5 * Math.cos(e.lngLat.lat * Math.PI / 180) / Math.pow(2, z); pickGeo(e.lngLat.lat, e.lngLat.lng, mpp); } });
   }
+  // One small arrow per direction color and map look, drawn here so no extra file has to download.
+  function arrowCanvas(color, size) {
+    const c = document.createElement('canvas'), g = c.getContext('2d'), u = size / 18;
+    c.width = c.height = size;
+    g.beginPath(); g.moveTo(4 * u, 3.5 * u); g.lineTo(14.5 * u, 9 * u); g.lineTo(4 * u, 14.5 * u); g.lineTo(6.5 * u, 9 * u); g.closePath();
+    g.lineJoin = 'round'; g.lineWidth = 2.4 * u; g.strokeStyle = '#ffffff'; g.stroke(); g.fillStyle = color; g.fill();
+    return g.getImageData(0, 0, size, size);
+  }
+  function addArrowImages(m) {
+    for (const name of ['light', 'dark']) MAP_LOOK[name].dirs.forEach((color, i) => { const id = `sv-arrow-${name}-${i}`; if (!m.hasImage(id)) m.addImage(id, arrowCanvas(color, 36), { pixelRatio: 2 }); });
+  }
   function addRealLayers() {
     const m = RM.map;
     const corridorLines = []; for (let i = 0; i < corridors.length; i += 2) corridorLines.push(line([[E.lon[corridors[i]], E.lat[corridors[i]]], [E.lon[corridors[i + 1]], E.lat[corridors[i + 1]]]]));
@@ -1123,7 +1164,13 @@ window.SVBoot = function (networkText) {
     m.addLayer({ id: 'corridors', type: 'line', source: 'corridors', paint: { 'line-color': L.line, 'line-opacity': .5, 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 15, 4] }, layout: { 'line-cap': 'round' } });
     m.addLayer({ id: 'stops', type: 'circle', source: 'stops', minzoom: 13.5, paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 13.5, 2, 17, 5], 'circle-color': L.dot, 'circle-stroke-color': halo, 'circle-stroke-width': 1 } });
     m.addLayer({ id: 'trip-walk', type: 'line', source: 'trip', filter: ['==', ['get', 'walk'], 1], paint: { 'line-color': text, 'line-width': 3, 'line-dasharray': [0.5, 2] }, layout: { 'line-cap': 'round' } });
-    m.addLayer({ id: 'trip-ride', type: 'line', source: 'trip', filter: ['!=', ['get', 'walk'], 1], paint: { 'line-color': ['get', 'color'], 'line-width': 6 }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
+    // A route's directions: each drawn to the right of its way of travel, so the way out and the way back sit side by side
+    // on the same street, with a dark edge for contrast and arrows that show which way the bus goes.
+    const dirLine = ['==', ['get', 'dir'], 1], DIR_OFFSET = 3.5;
+    m.addLayer({ id: 'trip-casing', type: 'line', source: 'trip', filter: dirLine, paint: { 'line-color': L.casing, 'line-opacity': .55, 'line-width': 8, 'line-offset': DIR_OFFSET }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
+    m.addLayer({ id: 'trip-ride', type: 'line', source: 'trip', filter: ['!=', ['get', 'walk'], 1], paint: { 'line-color': ['get', 'color'], 'line-width': ['case', dirLine, 5, 6], 'line-offset': ['case', dirLine, DIR_OFFSET, 0] }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
+    addArrowImages(m);
+    m.addLayer({ id: 'trip-arrows', type: 'symbol', source: 'trip', filter: dirLine, layout: { 'symbol-placement': 'line', 'symbol-spacing': 110, 'icon-image': ['get', 'arrow'], 'icon-rotation-alignment': 'map', 'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-offset': [0, DIR_OFFSET] } });
     m.addLayer({ id: 'stations', type: 'circle', source: 'stations', paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 2.5, 15, 6], 'circle-color': L.surface, 'circle-stroke-color': L.line, 'circle-stroke-width': 2 } });
     m.addLayer({ id: 'trip-pts', type: 'circle', source: 'tripPts', paint: { 'circle-radius': 7, 'circle-color': L.surface, 'circle-stroke-color': text, 'circle-stroke-width': 3 } });
     m.addLayer({ id: 'stops-label', type: 'symbol', source: 'stops', minzoom: 16, layout: { 'text-field': ['get', 'name'], 'text-font': font, 'text-size': 11, 'text-anchor': 'left', 'text-offset': [.7, 0], 'text-optional': true }, paint: { 'text-color': L.muted, 'text-halo-color': halo, 'text-halo-width': 1.5 } });
@@ -1223,7 +1270,7 @@ window.SVBoot = function (networkText) {
     if (from) lines.push(line([[from.lon, from.lat], coordOf(rides[0].board)], { walk: 1 }));
     o.legs.forEach(l => {
       if (l.type === 'ride') {
-        lines.push(line(rideLine(l).map(p => [p[1], p[0]]), { color: l.color }));
+        lines.push(line(rideLine(l).map(p => [p[1], p[0]]), o.routeView ? { color: legColor(l), dir: 1, arrow: `sv-arrow-${state.mapDark ? 'dark' : 'light'}-${l.dir % DIR_COUNT}` } : { color: l.color }));
         points.push(pt(E.lat[l.board], E.lon[l.board], { name: o.routeView ? `${l.code} hacia ${pretty(l.dest)}` : `${l.code}: ${pretty(l.boardPlace.name)}` }));
         if (!o.routeView) points.push(pt(E.lat[l.alight], E.lon[l.alight], { name: `Bájate: ${pretty(l.alightPlace.name)}` }));
       } else if (l.fromStop !== undefined) lines.push(line([coordOf(l.fromStop), coordOf(l.toStop)], { walk: 1 }));
@@ -1287,6 +1334,28 @@ window.SVBoot = function (networkText) {
     }
   }
   function queueDraw() { if (!MAP.drawQueued) { MAP.drawQueued = true; requestAnimationFrame(() => { MAP.drawQueued = false; if (!$('map').hidden && !$('mapSheet').hidden) draw(); }); } }
+  // The simple map draws a direction like the street map: moved to the right of travel, with an edge and arrows.
+  function drawDirection(g, pts, color, L) {
+    const off = 3.5, out = pts.map((p, i) => {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)], dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+      return [p[0] - dy / len * off, p[1] + dx / len * off];
+    });
+    const path = () => { g.beginPath(); out.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1]))); };
+    g.setLineDash([]); g.lineJoin = 'round'; g.lineCap = 'round';
+    path(); g.globalAlpha = .55; g.strokeStyle = L.casing; g.lineWidth = 8; g.stroke(); g.globalAlpha = 1;
+    path(); g.strokeStyle = color; g.lineWidth = 5; g.stroke();
+    let since = 55;
+    for (let i = 1; i < out.length; i++) {
+      const [x0, y0] = out[i - 1], [x1, y1] = out[i], seg = Math.hypot(x1 - x0, y1 - y0);
+      since += seg;
+      if (since < 110 || seg < 1) continue;
+      since = 0;
+      const ang = Math.atan2(y1 - y0, x1 - x0), mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+      g.save(); g.translate(mx, my); g.rotate(ang);
+      g.beginPath(); g.moveTo(-5, -5.5); g.lineTo(5.5, 0); g.lineTo(-5, 5.5); g.lineTo(-2.5, 0); g.closePath();
+      g.lineWidth = 2.2; g.strokeStyle = '#ffffff'; g.stroke(); g.fillStyle = color; g.fill(); g.restore();
+    }
+  }
   function draw() {
     const c = $('map'), g = c.getContext('2d');
     const W = MAP.w, H = MAP.h, s = MAP.scale;
@@ -1304,7 +1373,8 @@ window.SVBoot = function (networkText) {
     g.stroke(); g.globalAlpha = 1;
     if (MAP.option) {
       for (const l of MAP.option.legs) {
-        if (l.type === 'ride') {
+        if (l.type === 'ride' && MAP.option.routeView) drawDirection(g, rideLine(l).map(p => [sx(toX(p[1])), sy(toY(p[0]))]), legColor(l), L);
+        else if (l.type === 'ride') {
           g.strokeStyle = l.color; g.lineWidth = 6; g.setLineDash([]); g.lineJoin = 'round';
           g.beginPath(); rideLine(l).forEach((p, i) => { const x = sx(toX(p[1])), y = sy(toY(p[0])); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
         } else if (l.fromStop !== undefined) {
@@ -1422,6 +1492,7 @@ window.SVBoot = function (networkText) {
     $('mapChosen').textContent = confirming ? [place.name, place.sub].filter(Boolean).join(' · ') : 'Toca el mapa para elegir un punto';
     showPlaceHelp(confirming ? place : null);
     renderMapLook();
+    renderLegend();
     $('zoomMe').hidden = !WEB;
     // The glance screen has no map, so nothing is downloaded until the rider asks for one.
     const glance = mode === 'follow' && state.glance;
@@ -1654,7 +1725,7 @@ window.SVBoot = function (networkText) {
     else if (t.dataset.routesMore) { routesUi.shown += 40; renderRoutes(); }
     else if (t.dataset.routesAll) { routesUi.at = null; renderRoutes(); $('routesList').scrollTop = 0; }
     else if (t.dataset.stopAt !== undefined) openRoutes(stopAtPlace(+t.dataset.stopAt));
-    else if (t.dataset.routeMap !== undefined) { const v = routeVariants(state.routeView)[+t.dataset.routeMap]; openMap('view', { routeView: true, legs: [routeLeg(v)] }); }
+    else if (t.dataset.routeMap !== undefined) { const i = +t.dataset.routeMap, legs = routeVariants(state.routeView).map((v, k) => routeLeg(v, k)); openMap('view', { routeView: true, focus: i, legs: [...legs.filter(l => l.dir !== i), legs[i]] }); }
     else if (t.id === 'legalClose') $('legalSheet').hidden = true;
     else if (t.id === 'forgetBtn') forgetMe(t);
     else if (t.dataset.report !== undefined) openReport(lastOptions[+t.dataset.report]);
