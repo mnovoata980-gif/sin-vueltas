@@ -9,6 +9,7 @@
   --sign: #ffc400; --on-sign: #10192e; --sign-edge: #c99700;
   --red: #d9202a; --red-edge: #a1141c; --green: #0a8540; --green-edge: #06602e;
   --link: #1b3fcb; --good: #0a7a3b; --walk: #8b97b5; --on-walk: #10192e;
+  --end: #1b3fcb; --on-end: #ffffff; --end-edge: #1532a6;
   --wait-bg: #fff1c2; --wait-ink: #5e4500; --warn-bg: #fff1c2; --warn-ink: #5e4500;
   --edge: #c9d3e8; --shadow: 0 1px 2px rgba(16, 40, 120, .08), 0 6px 18px rgba(16, 40, 120, .08);
   --map-bg: #e9eef8; --map-line: #2b3a63; --map-dot: #94a1c0; --map-text: #10192e; --map-halo: #e9eef8; --me: #1b6fe0;
@@ -19,6 +20,7 @@
   --bg: #0d1430; --surface: #182145; --sunk: #232d58; --ink: #eef2ff; --muted: #a9b5d6; --line: #2b3563;
   --top: #1a2c86; --top-deep: #14226b; --top-far: #172778;
   --link: #a9bdff; --good: #5fd897; --walk: #6f7ca3; --on-walk: #ffffff;
+  --end: #a9bdff; --on-end: #10192e; --end-edge: #6f86d6;
   --wait-bg: #3a2f0c; --wait-ink: #ffe08a; --warn-bg: #3a2f0c; --warn-ink: #ffe08a;
   --edge: #0a1028; --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px rgba(0, 0, 0, .25);
   --map-bg: #111a3a; --map-line: #c5d0ee; --map-dot: #5d6a91; --map-text: #eef2ff; --map-halo: #111a3a; --me: #5aa2ff;
@@ -28,6 +30,7 @@
   --bg: #0d1430; --surface: #182145; --sunk: #232d58; --ink: #eef2ff; --muted: #a9b5d6; --line: #2b3563;
   --top: #1a2c86; --top-deep: #14226b; --top-far: #172778;
   --link: #a9bdff; --good: #5fd897; --walk: #6f7ca3; --on-walk: #ffffff;
+  --end: #a9bdff; --on-end: #10192e; --end-edge: #6f86d6;
   --wait-bg: #3a2f0c; --wait-ink: #ffe08a; --warn-bg: #3a2f0c; --warn-ink: #ffe08a;
   --edge: #0a1028; --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px rgba(0, 0, 0, .25);
   --map-bg: #111a3a; --map-line: #c5d0ee; --map-dot: #5d6a91; --map-text: #eef2ff; --map-halo: #111a3a; --me: #5aa2ff;
@@ -293,6 +296,11 @@ h1, h2, h3, p { margin: 0; }
 #fRecalc, #fEnd { grid-column: 1 / -1; }
 .follow[data-level="alert"] .btn, .follow[data-level="good"] .btn { background: #ffffff; color: #10192e; box-shadow: 0 3px 0 rgba(0, 0, 0, .25); }
 .follow .btn.sos, .follow[data-level] .btn.sos { background: var(--red); color: #ffffff; box-shadow: 0 3px 0 var(--red-edge); }
+/* Leaving trip mode is its own kind of action: solid blue, apart from the white controls and from the red emergency button. */
+.follow .btn.end { background: var(--end); color: var(--on-end); box-shadow: 0 3px 0 var(--end-edge); }
+/* Yellow and green screens look the same in both themes, so the button takes fixed colors that stand out on each. */
+.follow[data-level="alert"] .btn.end { background: #1b3fcb; color: #ffffff; box-shadow: 0 3px 0 #1532a6; }
+.follow[data-level="good"] .btn.end { background: #10192e; color: #ffffff; box-shadow: 0 3px 0 rgba(0, 0, 0, .35); }
 @media (max-width: 339px) { .follow .btn.sos .i { display: none; } }
 .sheet:not(.glance) #fHint { display: none; }
 /* Glance screen: one instruction filling the phone, so it comes out of the pocket as little as possible. */
