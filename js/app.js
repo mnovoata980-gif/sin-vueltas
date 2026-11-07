@@ -539,7 +539,9 @@ window.SVBoot = function (networkText) {
     }
     if (!state.to && !WEB) html += '<div class="verdict"><p>Dinos a dónde vas y de dónde sales.</p><button type="button" class="linkish" id="showExample">Ver un viaje de ejemplo</button></div>';
     if (!state.recent.length && !state.lastTo.length) html += '<button type="button" class="linkish first-time" data-help="1">¿Primera vez en TransMilenio? Así funciona</button>';
-    return html + nearbyHtml() + fineHtml();
+    html += nearbyHtml();
+    html += `<button type="button" class="btn wide routes-cta" data-open-routes="1">${icon('bus')}Buscar una ruta y ver sus paradas</button>`;
+    return html + fineHtml();
   }
   let renderSeq = 0;
   function render() {
@@ -691,15 +693,123 @@ window.SVBoot = function (networkText) {
       const service = last < 0 ? '<p class="warn">Hoy no tiene salidas en el archivo oficial.</p>'
         : `<p class="meta">${perHour ? `Ahora pasa cada ~${Math.max(1, Math.round(60 / perHour))} min` : 'A esta hora no pasa'} · primer bus ${clock(fromMid(p, v.from, first))} · último ${clock(fromMid(p, v.from, last))}</p>`;
       const names = stops.map(s => pretty(E.place(s).name));
+      // Each stop is a button: it lists the other routes that stop there, so a rider can plan a transfer by hand.
+      const rows = stops.map((s, k) => `<li class="${S.p[s] >= 0 ? 'is-station' : 'is-stop'}"><button type="button" class="stop-link" data-stop-at="${s}">${esc(names[k])}</button></li>`).join('');
       return `<article class="card route-card"><div class="card-main">
         <h3 class="group-title">Hacia ${esc(pretty(v.dest))}</h3>
         <p class="meta">${stops.length} paradas · ${runMin} min de punta a punta · de ${esc(names[0])} a ${esc(names[names.length - 1])}</p>
         ${service}
-        <details class="via"><summary>Ver las ${stops.length} paradas</summary><ol>${names.map(n => `<li>${esc(n)}</li>`).join('')}</ol></details>
         <div class="card-actions route-actions"><button type="button" class="btn" data-route-map="${i}">${icon('map')}Ver en el mapa</button></div>
+        <details class="via stops-line"${i === 0 ? ' open' : ''}><summary>Sus ${stops.length} paradas, en orden</summary>
+          <p class="stops-key"><span class="k-st">Estación</span><span class="k-pd">Paradero</span> Toca una parada para ver qué otras rutas paran ahí.</p>
+          <ol>${rows}</ol></details>
       </div></article>`;
     }).join('');
-    return `<div class="verdict"><h2>Ruta ${plate(code, '#' + r0[2], '#' + r0[3])}</h2><p>${esc(SVC[r0[4]] || 'Bus')} · ${vs.length === 1 ? '1 sentido' : `${vs.length} sentidos`}. Horarios programados del ${dayLabel(net.meta.feed)}.</p><button type="button" class="linkish" data-route-close="1">Volver</button></div>${cards}${fineHtml()}`;
+    const back = state.routeFrom === 'routes' ? 'Volver a las rutas' : 'Volver';
+    return `<div class="verdict"><h2>Ruta ${plate(code, '#' + r0[2], '#' + r0[3])}</h2><p>${esc(SVC[r0[4]] || 'Bus')} · ${vs.length === 1 ? '1 sentido' : `${vs.length} sentidos`}. Horarios programados del ${dayLabel(net.meta.feed)}.</p><button type="button" class="linkish" data-route-close="1">${back}</button></div>${cards}${fineHtml()}`;
+  }
+
+  // ---------- «Rutas»: every route, searchable by code, destination or station ----------
+  // One entry per code painted on the bus, built the first time someone opens the section.
+  const ROUTE_KINDS = [['todas', 'Todas'], ['troncal', 'Troncales'], ['zonal', 'Zonales'], ['alimentador', 'Alimentadores'], ['otras', 'Otras']];
+  const kindOf = svc => svc === 1 ? 'troncal' : svc === 2 ? 'alimentador' : svc === 3 ? 'zonal' : 'otras';
+  const codeKey = c => String(c).toUpperCase().replace(/[\s-]+/g, '');
+  const byCodeOrder = (a, b) => a.code.localeCompare(b.code, 'es', { numeric: true });
+  let routeIndex = null, routeByCode = null;
+  function getRouteIndex() {
+    if (routeIndex) return routeIndex;
+    const found = new Map(), day = currentQuery().day;
+    E.P.forEach(p => {
+      const r = E.routes[p.route], trips = p.cnt[day].reduce((a, b) => a + b, 0);
+      for (const [, code, dest] of [[0, p.code, p.dest], ...(p.signs || [])]) {
+        let e = found.get(code);
+        if (!e) found.set(code, e = { code, key: codeKey(code), color: '#' + r[2], text: '#' + r[3], svc: r[4], dests: new Map() });
+        e.dests.set(dest, (e.dests.get(dest) || 0) + trips + 1);
+      }
+    });
+    routeIndex = [...found.values()].map(e => {
+      const dests = [...new Set([...e.dests].sort((a, b) => b[1] - a[1]).map(x => pretty(x[0])))];
+      return { code: e.code, key: e.key, color: e.color, text: e.text, svc: e.svc, dests, destKey: norm(dests.join(' ')) };
+    }).sort(byCodeOrder);
+    routeByCode = new Map(routeIndex.map(e => [e.code, e]));
+    return routeIndex;
+  }
+  // The codes that stop at any of these stops, read from the sign the bus shows at that point.
+  function routesAt(stops) {
+    getRouteIndex();
+    const codes = new Set();
+    for (const s of stops) {
+      const at = E.atStop[s];
+      for (let k = 0; k < at.length; k += 2) {
+        const p = E.P[at[k]], pos = at[k + 1];
+        let code = p.code;
+        if (p.signs) for (const [from, c] of p.signs) if (pos >= from) code = c;
+        codes.add(code);
+      }
+    }
+    return [...codes].map(c => routeByCode.get(c)).filter(Boolean).sort(byCodeOrder);
+  }
+  // A station is all its platforms; a street stop is every stop with that name close by (both sides of the street).
+  function stopsOfPlace(p) {
+    if (p.kind === 'station') return E.children[p.station];
+    const key = norm(p.name), near = E.near(p.lat, p.lon, /^barrio /i.test(p.name) ? 800 : 300), out = [];
+    for (let k = 0; k < near.length; k += 2) if (norm(pretty(S.n[near[k]])) === key) out.push(near[k]);
+    return out;
+  }
+  function stopAtPlace(s) {
+    const st = S.p[s];
+    if (st >= 0) return { title: pretty(S.n[st]), sub: 'Estación de TransMilenio', stops: E.children[st] };
+    const name = pretty(S.n[s]);
+    return { title: name, sub: 'Paradero', stops: stopsOfPlace({ kind: 'stop', name, lat: E.lat[s], lon: E.lon[s] }) };
+  }
+  const routesUi = { q: '', kind: 'todas', shown: 40, at: null };
+  const destLine = e => !e.dests.length ? 'Sin destino en el archivo' : 'Hacia ' + e.dests.slice(0, 2).join(' · ') + (e.dests.length > 2 ? ` y ${e.dests.length - 2} más` : '');
+  const routeRow = e => `<button type="button" class="opt route-row" data-route-code="${esc(e.code)}"><span class="route-plate">${plate(e.code, e.color, e.text)}</span><span class="opt-t"><b>${esc(destLine(e))}</b><small>${esc(SVC[e.svc] || 'Bus')}</small></span></button>`;
+  const inKind = e => routesUi.kind === 'todas' || kindOf(e.svc) === routesUi.kind;
+  function placeBlock(title, sub, list, closed) {
+    const rows = list.filter(inKind);
+    if (!rows.length) return `<h3 class="list-title">Paran en ${esc(title)}</h3><p class="hint">${list.length ? 'Ninguna de este tipo. Prueba con «Todas».' : closed ? esc(closed) + '.' : 'En el archivo oficial no le para ninguna ruta.'}</p>`;
+    const head = `<h3 class="list-title">Paran en ${esc(title)} <small>${esc(sub)} · ${rows.length} ${rows.length === 1 ? 'ruta' : 'rutas'}</small></h3>`;
+    return head + rows.slice(0, 8).map(routeRow).join('') + (rows.length > 8 ? `<details class="more-rows"><summary>Ver las otras ${rows.length - 8}</summary>${rows.slice(8).map(routeRow).join('')}</details>` : '');
+  }
+  function renderRoutes() {
+    const all = getRouteIndex(), q = routesUi.q.trim();
+    $('routeKinds').innerHTML = ROUTE_KINDS.map(([k, label]) => `<button type="button" class="chip" data-route-kind="${k}" aria-pressed="${routesUi.kind === k}">${label}</button>`).join('');
+    let html = '';
+    if (!q && routesUi.at) {
+      const at = routesUi.at;
+      html += placeBlock(at.title, at.sub, routesAt(at.stops));
+      html += '<button type="button" class="linkish more-link" data-routes-all="1">Ver todas las rutas</button>';
+    } else if (!q) {
+      const list = all.filter(inKind);
+      html += '<p class="hint">Escribe el código que lleva el bus (B28, 8-1, H710), a dónde va (Suba, Usme) o una estación (Calle 72) y mira todas sus paradas.</p>';
+      html += `<h3 class="list-title">${routesUi.kind === 'todas' ? 'Todas las rutas' : esc(ROUTE_KINDS.find(k => k[0] === routesUi.kind)[1])} <small>${list.length}</small></h3>`;
+      html += list.slice(0, routesUi.shown).map(routeRow).join('');
+      if (list.length > routesUi.shown) html += `<button type="button" class="btn wide more-link" data-routes-more="1">Ver ${Math.min(40, list.length - routesUi.shown)} más</button>`;
+    } else {
+      const key = codeKey(q), words = norm(q);
+      const byCode = key ? all.filter(e => inKind(e) && e.key.startsWith(key)).sort((a, b) => (b.key === key) - (a.key === key) || byCodeOrder(a, b)) : [];
+      const listed = new Set(byCode.map(e => e.code));
+      if (byCode.length) html += `<h3 class="list-title">Con ese código <small>${byCode.length}</small></h3>` + byCode.slice(0, 40).map(routeRow).join('');
+      // Stations and stops with that name: the routes that stop there.
+      // Codes have no real words (B28, 8-1, TC12), so places and destinations are only searched for words like «calle» or «suba».
+      if (/[a-zñ]{3,}/.test(words)) {
+        const seen = new Set(), placesFound = searchPlaces(q, 8).filter(p => p.kind === 'station' || p.kind === 'stop').filter(p => { const k = p.kind + norm(p.name); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 2);
+        for (const p of placesFound) html += placeBlock(p.name, p.kind === 'station' ? 'Estación de TransMilenio' : 'Paradero', routesAt(stopsOfPlace(p)), p.noService ? subLabel(p) : '');
+        const byDest = all.filter(e => inKind(e) && !listed.has(e.code) && e.destKey.includes(words));
+        if (byDest.length) html += `<h3 class="list-title">Van hacia «${esc(q)}» <small>${byDest.length}</small></h3>` + byDest.slice(0, 40).map(routeRow).join('') + (byDest.length > 40 ? '<p class="hint">Hay más. Escribe un poco más para afinar.</p>' : '');
+      }
+      if (!html) html = `<p class="hint">No encontramos rutas con «${esc(q)}». Revisa el código como aparece en el bus, o escribe una estación o un barrio.</p>`;
+    }
+    $('routesList').innerHTML = html;
+  }
+  function openRoutes(at) {
+    routesUi.at = at || null;
+    if (at) { routesUi.q = ''; routesUi.kind = 'todas'; }
+    $('routesQuery').value = routesUi.q;
+    renderRoutes();
+    $('routesList').scrollTop = 0;
+    $('routesSheet').hidden = false;
   }
 
   // ---------- place picker ----------
@@ -1536,8 +1646,14 @@ window.SVBoot = function (networkText) {
     else if (t.id === 'helpClose') $('helpSheet').hidden = true;
     else if (t.id === 'installNow' && deferredInstall) { deferredInstall.prompt(); deferredInstall.userChoice.finally(() => { deferredInstall = null; openHelp(); }); }
     else if (t.dataset.share !== undefined) shareTrip(lastOptions[+t.dataset.share]);
-    else if (t.dataset.routeCode) { state.routeView = t.dataset.routeCode; $('picker').hidden = true; state.formOpen = false; render(); window.scrollTo(0, 0); }
-    else if (t.dataset.routeClose) { state.routeView = null; render(); window.scrollTo(0, 0); }
+    else if (t.dataset.routeCode) { state.routeFrom = t.closest('#routesSheet') ? 'routes' : null; state.routeView = t.dataset.routeCode; $('picker').hidden = true; $('routesSheet').hidden = true; state.formOpen = false; render(); window.scrollTo(0, 0); }
+    else if (t.dataset.routeClose) { const back = state.routeFrom === 'routes'; state.routeView = null; state.routeFrom = null; render(); window.scrollTo(0, 0); if (back) $('routesSheet').hidden = false; }
+    else if (t.dataset.openRoutes) openRoutes();
+    else if (t.id === 'routesClose') $('routesSheet').hidden = true;
+    else if (t.dataset.routeKind) { routesUi.kind = t.dataset.routeKind; routesUi.shown = 40; renderRoutes(); $('routesList').scrollTop = 0; }
+    else if (t.dataset.routesMore) { routesUi.shown += 40; renderRoutes(); }
+    else if (t.dataset.routesAll) { routesUi.at = null; renderRoutes(); $('routesList').scrollTop = 0; }
+    else if (t.dataset.stopAt !== undefined) openRoutes(stopAtPlace(+t.dataset.stopAt));
     else if (t.dataset.routeMap !== undefined) { const v = routeVariants(state.routeView)[+t.dataset.routeMap]; openMap('view', { routeView: true, legs: [routeLeg(v)] }); }
     else if (t.id === 'legalClose') $('legalSheet').hidden = true;
     else if (t.id === 'forgetBtn') forgetMe(t);
@@ -1579,9 +1695,11 @@ window.SVBoot = function (networkText) {
   document.addEventListener('click', e => { const a = e.target.closest('a[data-copy-first]'); if (a) copyReport(); });
   $('reportSheet').addEventListener('input', () => renderReport());
   $('pickerTitle').addEventListener('input', e => { pickerCat = null; renderPicker(e.target.value); });
+  let routesTimer = 0;
+  $('routesQuery').addEventListener('input', e => { clearTimeout(routesTimer); routesTimer = setTimeout(() => { routesUi.q = e.target.value; routesUi.at = null; routesUi.shown = 40; renderRoutes(); $('routesList').scrollTop = 0; }, 120); });
   $('day').addEventListener('change', e => { state.day = +e.target.value; render(); });
   $('time').addEventListener('change', e => { if (e.target.value) { state.time = e.target.value; render(); } });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !FOLLOW.active) { if (!$('helpSheet').hidden) $('helpSheet').hidden = true; else if (!$('reportSheet').hidden) $('reportSheet').hidden = true; else if (!$('legalSheet').hidden) $('legalSheet').hidden = true; else if (!$('mapSheet').hidden) $('mapSheet').hidden = true; else if (!$('picker').hidden) { $('picker').hidden = true; state.savingFav = null; render(); } } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !FOLLOW.active) { if (!$('helpSheet').hidden) $('helpSheet').hidden = true; else if (!$('reportSheet').hidden) $('reportSheet').hidden = true; else if (!$('legalSheet').hidden) $('legalSheet').hidden = true; else if (!$('mapSheet').hidden) $('mapSheet').hidden = true; else if (!$('routesSheet').hidden) $('routesSheet').hidden = true; else if (!$('picker').hidden) { $('picker').hidden = true; state.savingFav = null; render(); } } });
   let deferredInstall = null;
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; $('installApp').hidden = false; });
 
@@ -1734,7 +1852,7 @@ window.SVBoot = function (networkText) {
     announce([head.textContent, part('.big'), part('.arrive'), part('.price')].filter(Boolean).map(x => x.replace(/\.$/, '')).join('. '));
   }
   // Focus goes into a sheet when it opens and back where it was when it closes, and the page behind cannot be reached.
-  const SHEETS = [$('picker'), $('mapSheet'), $('legalSheet'), $('reportSheet'), $('helpSheet')], shell = document.querySelector('.shell');
+  const SHEETS = [$('picker'), $('routesSheet'), $('mapSheet'), $('legalSheet'), $('reportSheet'), $('helpSheet')], shell = document.querySelector('.shell');
   const openSheet = () => SHEETS.filter(s => !s.hidden).pop() || null;
   let topSheet = null, returnTo = null;
   function sheetsChanged() {
@@ -1745,7 +1863,7 @@ window.SVBoot = function (networkText) {
     shell.inert = !!top;
     if (top) shell.setAttribute('aria-hidden', 'true'); else shell.removeAttribute('aria-hidden');
     (top || document.body).appendChild($('announce'));
-    if (top) { ({ picker: $('pickerTitle'), mapSheet: $('mapTitle'), legalSheet: $('legalTitle'), reportSheet: $('reportTitle'), helpSheet: $('helpTitle') })[top.id].focus(); return; }
+    if (top) { ({ picker: $('pickerTitle'), routesSheet: routesUi.at ? $('routesList') : $('routesQuery'), mapSheet: $('mapTitle'), legalSheet: $('legalTitle'), reportSheet: $('reportTitle'), helpSheet: $('helpTitle') })[top.id].focus(); return; }
     if (returnTo && returnTo.isConnected && returnTo.offsetParent !== null) returnTo.focus();
     else $('results').focus({ preventScroll: true });
   }
@@ -1770,7 +1888,7 @@ window.SVBoot = function (networkText) {
   const shared = WEB && openSharedTrip();
   render();
   // A shared link opened while the app is already on screen changes only the hash.
-  window.addEventListener('hashchange', () => { if (WEB && openSharedTrip()) { state.routeView = null; $('picker').hidden = true; $('mapSheet').hidden = true; render(); window.scrollTo(0, 0); } });
+  window.addEventListener('hashchange', () => { if (WEB && openSharedTrip()) { state.routeView = null; $('picker').hidden = true; $('routesSheet').hidden = true; $('mapSheet').hidden = true; render(); window.scrollTo(0, 0); } });
   setTimeout(checkForUpdate, 4000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkForUpdate(); });
   if (WEB && navigator.geolocation && navigator.permissions && navigator.permissions.query) {

@@ -375,3 +375,34 @@ html[data-lite] .card, html[data-lite] .enable, html[data-lite] .near { border: 
 .toast { position: fixed; left: 50%; bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 60; max-width: calc(100% - 32px); background: var(--ink); color: var(--bg); border-radius: .875rem; padding: .625rem .875rem; font-size: var(--small); box-shadow: var(--shadow); }
 .center-pin { position: absolute; left: 50%; top: 50%; width: 2.5rem; height: 3.25rem; transform: translate(-50%, -100%); z-index: 3; pointer-events: none; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .3)); }
 .center-pin svg { display: block; width: 100%; height: 100%; }
+/* «Rutas»: the header button, the search screen and the stops of a route as a line */
+.mast-actions { display: flex; align-items: center; gap: .5rem; }
+.mast-btn { display: inline-flex; align-items: center; gap: .375rem; min-height: 2.75rem; padding: 0 .875rem; border-radius: 1.5rem; border: 2px solid var(--top-line); background: transparent; color: var(--on-top); font-size: var(--small); font-weight: 600; }
+.mast-btn:active { transform: translateY(1px); }
+.sheet-sub { background: var(--top); display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: none; padding: 0 max(16px, env(safe-area-inset-right, 0px)) .75rem max(16px, env(safe-area-inset-left, 0px)); }
+.sheet-sub::-webkit-scrollbar { display: none; }
+.sheet-sub .chip { flex: none; }
+.list-title small { color: var(--muted); font-size: var(--small); font-weight: 500; margin-left: .25rem; }
+.list:focus { outline: none; }
+.opt.route-row { grid-template-columns: 4.5rem minmax(0, 1fr); }
+.route-plate { display: flex; align-items: center; }
+.route-plate .plate { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 1.0625rem; }
+.more-rows > summary { cursor: pointer; min-height: var(--tap); display: flex; align-items: center; color: var(--link); font-weight: 600; font-size: var(--small); }
+.more-link { margin-top: .75rem; }
+.routes-cta { margin-top: .25rem; }
+.stops-line { color: var(--ink); }
+.stops-key { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .875rem; margin: .125rem 0 .375rem; color: var(--muted); }
+.stops-key span { display: inline-flex; align-items: center; gap: .375rem; }
+.stops-key span::before { content: ''; width: .6875rem; height: .6875rem; border-radius: 50%; box-sizing: border-box; }
+.stops-key .k-st::before { background: var(--red); }
+.stops-key .k-pd::before { border: 2.5px solid var(--link); background: var(--surface); }
+.stops-line ol { list-style: none; margin: 0; padding: 0; }
+.stops-line li { position: relative; padding-left: 1.625rem; }
+.stops-line li::before { content: ''; position: absolute; left: .4375rem; top: 0; bottom: 0; width: 3px; background: var(--line); }
+.stops-line li:first-child::before { top: 50%; }
+.stops-line li:last-child::before { bottom: 50%; }
+.stops-line li::after { content: ''; position: absolute; left: .1875rem; top: 50%; width: .6875rem; height: .6875rem; margin-top: -.34375rem; border-radius: 50%; box-sizing: border-box; border: 2.5px solid var(--link); background: var(--surface); }
+.stops-line li.is-station::after { border-color: var(--red); background: var(--red); }
+.stop-link { display: block; width: 100%; min-height: 2.75rem; padding: .375rem 0; background: none; border: 0; border-bottom: 1px solid var(--line); text-align: left; color: var(--ink); font-size: var(--small); }
+.stops-line li:last-child .stop-link { border-bottom: 0; }
+.stops-line li.is-station .stop-link { font-weight: 600; }
