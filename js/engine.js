@@ -46,7 +46,10 @@
       const when = k === 'trunk' ? l.ready : l.ready + l.wait;
       if (prev) {
         const sameStation = l.boardPlace.station >= 0 && l.boardPlace.station === prev.alightPlace.station;
-        const insidePaidArea = (pk === 'trunk' && k === 'trunk' && sameStation) || (pk === 'feeder' && k === 'trunk') || (pk === 'trunk' && k === 'feeder');
+        // A bus that enters the portal (green feeder, or a blue one like the 6-3 at Portal Tunal) leaves the rider
+        // inside the paid area: the next bus in that portal is part of the same fare, as with the green feeders.
+        const intoPortal = sameStation && (l.feeds || prev.feeds);
+        const insidePaidArea = (pk === 'trunk' && k === 'trunk' && sameStation) || intoPortal || (pk === 'feeder' && k === 'trunk') || (pk === 'trunk' && k === 'feeder');
         if (insidePaidArea) return;
       }
       basic += fare;
@@ -82,6 +85,24 @@
       if (p.signs) for (const [from, c, d] of p.signs) if (pos >= from) { code = c; dest = d; }
       return { code, dest };
     };
+    // The file leaves some feeder platforms out of their portal (Portal Norte, Portal Tunal twice and 20 de Julio in
+    // November 2026), so getting off the feeder there looked like walking to another station. A feeder platform a few
+    // steps from a trunk platform belongs to that station. Done on the data itself, so the app's lists agree with the engine.
+    {
+      const trunkStops = new Set();
+      P.forEach(p => { if (routes[p.route][4] === 1) for (const s of p.stops) if (S.p[s] >= 0) trunkStops.add(s); });
+      for (let i = 0; i < N; i++) {
+        if (S.k[i] || S.p[i] >= 0 || !/\balim/i.test(S.n[i])) continue;
+        let near = -1, best = 150;
+        for (const s of trunkStops) { const m = hav(lat[i], lon[i], lat[s], lon[s]); if (m < best) { best = m; near = s; } }
+        if (near >= 0) S.p[i] = S.p[near];
+      }
+    }
+    // Buses that take riders from their neighbourhood into a portal: the green feeders, and the blue routes that stop
+    // inside one (the 6-3 at Portal Tunal, the C104 at Portal Suba). Trunk means the red and dual buses of the stations.
+    const isPortal = st => /^portal/i.test(S.n[st]);
+    const feeds = P.map(p => { const a = routes[p.route][4]; return a === 2 || ((a === 3 || a === 4 || a === 5) && p.stops.some(s => S.p[s] >= 0 && isPortal(S.p[s]))); });
+    const trunks = P.map(p => { const a = routes[p.route][4]; return a === 1 || a === 6; });
     // Regulation points are where buses wait between trips. They appear in the file like any stop, but nobody gets on or off there.
     const NO_RIDERS = /regulaci/i, ridersUse = s => !NO_RIDERS.test(S.n[s]);
     const atStop = Array.from({ length: N }, () => []);
@@ -149,30 +170,34 @@
       return out;
     }
 
-    function search(from, to, day, t0, maxK, maxWalk, ban) {
+    // `shape`, when given, fixes what each bus of the trip is (see feederTrips). Each round then keeps only trips with
+    // exactly that many buses, so a trip shaped "feeder, then trunk" is found even when walking to the portal is faster.
+    function search(from, to, day, t0, maxK, maxWalk, ban, shape) {
       ensureLinks();
       const arr = [new Float64Array(N).fill(Infinity)], parP = [null], parB = [null], parA = [null], parW = [null];
       const orig = access(from, maxWalk), dest = access(to, maxWalk);
       let marked = [];
       for (const [s, sec] of orig) { arr[0][s] = t0 + sec; marked.push(s); }
       for (let k = 1; k <= maxK; k++) {
-        const prev = arr[k - 1], cur = prev.slice(), ride = new Float64Array(N).fill(Infinity);
+        const rule = shape ? shape[k - 1] : null;
+        const prev = arr[k - 1], cur = rule ? new Float64Array(N).fill(Infinity) : prev.slice(), ride = new Float64Array(N).fill(Infinity);
         const pp = new Int32Array(N).fill(-1), pb = new Int32Array(N), pa = new Int32Array(N), pw = new Int32Array(N).fill(-1);
         const queue = new Map();
         for (const s of marked) { const a = atStop[s]; for (let i = 0; i < a.length; i += 2) { const q = queue.get(a[i]); if (q === undefined || a[i + 1] < q) queue.set(a[i], a[i + 1]); } }
         const improved = [];
         for (const [pi, startPos] of queue) {
           const p = P[pi]; if (ban && ban.has(p.route)) continue;
+          if (rule && !rule.pat[pi]) continue;
           let bPos = -1, bDep = 0, bFac = 1;
           for (let pos = startPos; pos < p.stops.length; pos++) {
             const s = p.stops[pos];
             let here = Infinity;
-            if (bPos >= 0) {
+            if (bPos >= 0 && (!rule || !rule.alight || S.p[s] >= 0)) {
               here = bDep + (p.cum[pos] - p.cum[bPos]) * bFac;
               if (here < ride[s] && here < cur[s]) { ride[s] = here; cur[s] = here; pp[s] = pi; pb[s] = bPos; pa[s] = pos; pw[s] = -1; improved.push(s); }
             }
             const ready = prev[s];
-            if (ready < Infinity) {
+            if (ready < Infinity && (!rule || !rule.board || S.p[s] >= 0)) {
               const r = ready + (k > 1 ? TRANSFER_BUFFER : 0), b = boardAt(p, pos, r, day);
               if (b && r + b.wait < here) { bPos = pos; bDep = r + b.wait; bFac = b.factor; }
             }
@@ -181,9 +206,10 @@
         // Walk once after each ride. A walk never chains into another walk.
         const next = new Set(improved);
         for (const s of new Set(improved)) {
-          const l = links[s];
+          const l = links[s], st = stationOf(s);
           for (let i = 0; i < l.length; i += 2) {
             const o = l[i], t = ride[s] + l[i + 1];
+            if (rule && rule.stay && (st < 0 || stationOf(o) !== st)) continue;
             if (t < cur[o]) { cur[o] = t; pw[o] = s; pp[o] = -1; next.add(o); }
           }
         }
@@ -219,6 +245,9 @@
         cursor = board; round--;
       }
       legs.unshift({ type: 'walk', sec: res.arr[0][cursor] - t0, start: true, toStop: cursor });
+      // A walk to another stop after the last bus is part of the walk to the destination: there is no next bus to reach.
+      const end = legs.length - 1;
+      if (legs[end - 1].type === 'walk' && legs[end - 1].fromStop !== undefined) { legs[end].sec += legs[end - 1].sec; legs.splice(end - 1, 1); }
       return legs.filter(l => l.type === 'ride' || l.sec >= 20 || l.fromStop !== undefined);
     }
 
@@ -258,7 +287,7 @@
         if (l.type === 'walk') { walk += l.sec; continue; }
         const p = P[l.pat], r = routes[p.route], hop = sameHop(l, day);
         const sign = signAt(p, l.bPos), later = signAt(p, l.aPos);
-        l.code = sign.code; l.dest = sign.dest; l.color = '#' + r[2]; l.text = '#' + r[3]; l.agency = r[4]; l.routeIdx = p.route;
+        l.code = sign.code; l.dest = sign.dest; l.color = '#' + r[2]; l.text = '#' + r[3]; l.agency = r[4]; l.routeIdx = p.route; l.feeds = feeds[l.pat];
         // The rider stays on while the sign changes, and should not take that for the wrong bus.
         if (later.code !== sign.code) l.signChange = { code: later.code, dest: later.dest };
         l.boardPlace = place(l.board); l.alightPlace = place(l.alight); l.stopsCount = l.aPos - l.bPos;
@@ -273,10 +302,11 @@
       for (const l of legs) if (l.type === 'walk') { l.fromPlace = l.fromStop !== undefined ? place(l.fromStop) : null; l.toPlace = l.toStop !== undefined ? place(l.toStop) : null; }
       // How each change of bus happens, because they are not equally hard: inside the station nobody goes out
       // or pays again, at the same stop one just waits, and walking between stops means crossing streets.
+      // 'portal' is a change inside a station to or from a bus that enters it, like the feeder that leaves you in the portal.
       rides.forEach((l, i) => {
         if (!i) return;
         const prev = rides[i - 1], st = l.boardPlace.station;
-        l.change = st >= 0 && st === prev.alightPlace.station ? 'station' : prev.alight === l.board ? 'stop' : 'walk';
+        l.change = st >= 0 && st === prev.alightPlace.station ? (l.feeds || prev.feeds ? 'portal' : 'station') : prev.alight === l.board ? 'stop' : 'walk';
       });
       const option = { buses: k, legs, walk, wait, ride, total: walk + wait + ride, arrive: t0 + walk + wait + ride };
       option.fare = fareOf(option, net.meta.fare);
@@ -289,9 +319,30 @@
       return stop < 0 ? null : { stop, eg };
     }
 
-    function exact(from, to, day, t0, k, maxWalk, ban) {
-      const res = search(from, to, day, t0, k, maxWalk, ban), b = bestAt(res, k);
+    function exact(from, to, day, t0, k, maxWalk, ban, shape) {
+      const res = search(from, to, day, t0, k, maxWalk, ban, shape), b = bestAt(res, k);
       return b ? describe(res, k, b.stop, b.eg, day, t0) : null;
+    }
+
+    // Many riders would rather take the feeder that leaves them inside the portal than walk there, even if walking is
+    // a minute faster. The plain search keeps only the fastest trip for each number of buses, so those trips were often
+    // never considered. On 893 trips from or to feeder neighbourhoods (November 2026), searching for them on purpose put
+    // a trip with a bus into the portal on screen in 155 instead of 53, made it the recommendation in 20 more, and left
+    // the minutes lost against the fastest trip unchanged (1.4 on average).
+    const FEED_IN = { pat: feeds, alight: true, stay: true }, FEED_OUT = { pat: feeds, board: true };
+    const TRUNK = { pat: trunks }, TRUNK_STAY = { pat: trunks, stay: true };
+    const feederNear = (place, maxWalk) => { for (const s of access(place, maxWalk).keys()) if (S.p[s] < 0 && atStop[s].some((v, i) => i % 2 === 0 && feeds[v])) return true; return false; };
+    function feederTrips(q) {
+      const out = [], start = feederNear(q.from, q.maxWalk), end = feederNear(q.to, q.maxWalk);
+      for (let k = 2; k <= Math.min(3, q.limit); k++) {
+        const mid = Array.from({ length: k }, () => TRUNK);
+        const shapes = [];
+        if (start) shapes.push(mid.map((r, i) => (i === 0 ? FEED_IN : r)));
+        if (end) shapes.push(mid.map((r, i) => (i === k - 1 ? FEED_OUT : i === k - 2 ? TRUNK_STAY : r)));
+        if (start && end && k === 3) shapes.push([FEED_IN, TRUNK_STAY, FEED_OUT]);
+        for (const shape of shapes) { const o = exact(q.from, q.to, q.day, q.time, k, q.maxWalk, null, shape); if (o) out.push(o); }
+      }
+      return out;
     }
 
     function plan(q) {
@@ -363,7 +414,7 @@
     // 6 minutes inside a station, 8 at the same stop, 12 walking to another stop. Until November 2026 every extra bus
     // had to save 30 minutes; on 600 trips between real addresses that recommended a trip 5 or more minutes slower
     // than one already found in 28 % of them (median 12 minutes lost), and riders noticed. The limit on buses stays hard.
-    const CHANGE_COST = { station: 360, stop: 480, walk: 720 };
+    const CHANGE_COST = { station: 360, portal: 360, stop: 480, walk: 720 };
     const WEIGHTS = { buses: { transfer: null, walk: 0.5 }, time: { transfer: 120, walk: 0 }, walk: { transfer: 300, walk: 10 } };
     const changesCost = (o, w) => {
       if (w.transfer !== null) return (o.buses - 1) * w.transfer;
@@ -395,9 +446,25 @@
       base.groups.filter(g => g.buses <= limit).forEach(g => g.options.forEach(add));
       // Offer shorter walks too, since the fastest trip at the rider's limit often uses all of it.
       if (maxWalk > 300) plan({ ...q, maxBuses: limit, maxWalk: 300 }).groups.forEach(g => g.options.forEach(add));
+      feederTrips(q).forEach(add);
       const night = isNight(q.time), all = [...seen.values()], money = moneyOf(q, all);
-      const ranked = all.sort((a, b) => score(a, pref, night, money) - score(b, pref, night, money));
-      return { ...base, ranked, night, fastest: ranked.length ? ranked.reduce((a, b) => (b.total < a.total ? b : a)) : null };
+      const ranked = timeFirst(all.sort((a, b) => score(a, pref, night, money) - score(b, pref, night, money)), pref);
+      return { ...base, ranked, night, fastest: ranked.length ? ranked.reduce((a, b) => (b.total < a.total ? b : a)) : null, portal: portalOption(ranked) };
+    }
+    // The best trip that uses a bus into the portal, offered beside the recommendation unless it is much slower.
+    const usesPortal = o => o.legs.some(l => l.change === 'portal');
+    // Being left inside the portal is a comfort, not worth much time (Miguel, November 2026): if another trip arrives
+    // more than 6 minutes sooner, that one is recommended and the portal trip stays among the options. Before this rule,
+    // 7 of 98 recommended portal trips in the benchmarks arrived 6 to 9 minutes after the fastest. "Caminar menos" keeps its order.
+    const PORTAL_SLACK = 360;
+    function timeFirst(ranked, pref) {
+      if (pref === 'walk' || !ranked.length || !usesPortal(ranked[0])) return ranked;
+      const quick = ranked.find(o => !usesPortal(o) && o.total < ranked[0].total - PORTAL_SLACK);
+      return quick ? [quick, ...ranked.filter(o => o !== quick)] : ranked;
+    }
+    function portalOption(ranked) {
+      const o = ranked.find(usesPortal);
+      return o && o !== ranked[0] && !usesPortal(ranked[0]) && o.total <= ranked[0].total + 900 ? o : null;
     }
 
     // Arrive by a given time: finds the latest departure that still makes it.
@@ -434,7 +501,7 @@
       }
       const r = recommend({ ...q, time: found });
       const inTime = r.ranked.filter(o => o.arrive <= target);
-      return { ...r, ranked: inTime, target, depart: found, margin: inTime.length ? safetyMargin(inTime[0]) : 0 };
+      return { ...r, ranked: inTime, portal: portalOption(inTime), target, depart: found, margin: inTime.length ? safetyMargin(inTime[0]) : 0 };
     }
     const solve = q => (q.arriveBy !== undefined && q.arriveBy !== null ? arriveBy(q) : recommend(q));
 
@@ -446,7 +513,7 @@
       return w === 0 ? 2 : w === 6 ? 1 : 0;
     }
 
-    return { plan, recommend, arriveBy, solve, nearby, dayType, place, lat, lon, P, stationOf, atStop, children, near, warm: ensureLinks, stops: S, routes, meta: net.meta };
+    return { plan, recommend, arriveBy, solve, feederTrips, nearby, dayType, place, lat, lon, P, stationOf, atStop, children, near, warm: ensureLinks, stops: S, routes, meta: net.meta };
   }
 
   const api = { create, legible, contrast, fareOf, FARE_RULES };

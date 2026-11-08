@@ -213,7 +213,8 @@ h1, h2, h3, p { margin: 0; }
 .hops b { font-weight: 600; }
 .hops .plate { margin-right: .25rem; }
 .reasons { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .125rem .75rem; }
-.reasons li { color: var(--good); font-size: var(--small); font-weight: 500; display: inline-flex; align-items: center; gap: .25rem; }
+.reasons li { color: var(--good); font-size: var(--small); font-weight: 500; display: inline-flex; align-items: flex-start; gap: .25rem; }
+.reasons li .i { flex: none; margin-top: .08em; }
 .more { color: var(--link); font-size: var(--small); font-weight: 600; }
 .card[open] .more { display: none; }
 .card-actions { padding: 0 .875rem .875rem; display: flex; flex-wrap: wrap; gap: .5rem; }

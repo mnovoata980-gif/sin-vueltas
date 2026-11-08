@@ -372,11 +372,12 @@ window.SVBoot = function (networkText) {
         } else {
           const same = l.fromPlace.station >= 0 && l.fromPlace.station === l.toPlace.station;
           walkStep(same
-            ? `<p class="step-title">Transbordo dentro de la estación</p><p class="step-meta">Cambia de plataforma en ${esc(pretty(l.fromPlace.name))}, cerca de ${mins(l.sec)} min</p>`
+            ? `<p class="step-title">Transbordo dentro ${/^portal/i.test(l.fromPlace.name) ? 'del portal' : 'de la estación'}</p><p class="step-meta">Cambia de plataforma en ${esc(pretty(l.fromPlace.name))}, cerca de ${mins(l.sec)} min</p>`
             : `<p class="step-title">Camina ${mins(l.sec)} min para el siguiente bus</p><p class="step-meta">De ${esc(pretty(l.fromPlace.name))} a ${esc(pretty(l.toPlace.name))}</p>`);
         }
         return;
       }
+      const next = rides[rides.indexOf(l) + 1];
       const also = l.also.length ? `<p class="step-meta">También te sirven: ${l.also.map(x => { const c = routeColors(x.route); return plate(x.code, c[0], c[1], true); }).join(' ')}</p>` : '';
       const freq = l.also.length ? `Entre todas pasa un bus cada ~${mins(l.hwAll)} min` : `Pasa cada ~${mins(l.hwAll)} min`;
       const via = [...new Set(l.via.map(pretty))];
@@ -389,6 +390,7 @@ window.SVBoot = function (networkText) {
         ${l.nearLast ? '<p class="warn">Es de los últimos buses del día en esta ruta</p>' : ''}
         ${l.hwAll >= 1500 && !l.nearLast ? '<p class="warn">Pasa poco a esta hora. Llega con tiempo</p>' : ''}
         <p class="step-meta">${mins(l.sec)} min en el bus · bájate en <b>${esc(pretty(l.alightPlace.name))}</b></p>
+        ${next && next.change === 'portal' ? `<p class="step-meta">Te deja ${esc(insideOf(l.alightPlace.name))}: allí tomas el ${esc(next.code)} sin salir ni pagar otra vez.</p>` : ''}
         <details class="via"><summary>Ver las ${via.length} paradas</summary><ol>${via.map(v => `<li>${esc(v)}</li>`).join('')}</ol></details>
       </div></li>`);
     });
@@ -427,9 +429,11 @@ window.SVBoot = function (networkText) {
     else if (f.transferMin >= f.windowMin - 10) warn = `Tu transbordo sería a los ${f.transferMin} minutos, muy cerca del límite de ${f.windowMin}. Si te demoras, pagarías otro pasaje.`;
     return { chip, note: note.trim(), warn, ask: differs && state.card === 'unknown' };
   }
-  function cardHtml(o, open, tag, reasons) {
+  // `tag` is a text, or { text, icon } when the tag is not about time.
+  function cardHtml(o, open, tagIn, reasons) {
     const id = lastOptions.push(o) - 1;
-    const rides = o.legs.filter(l => l.type === 'ride'), price = priceOf(o);
+    const tag = tagIn && tagIn.text ? tagIn.text : tagIn, tagIcon = tagIn && tagIn.icon ? tagIn.icon : 'clock';
+    const rides = o.legs.filter(l => l.type === 'ride'), price = priceOf(o), portal = portalOf(o);
     const start2 = `<button type="button" class="btn primary" data-follow="${id}">${icon('go')}Iniciar viaje</button>`;
     const actions = `<div class="card-actions">${start2}<button type="button" class="btn" data-map-option="${id}">${icon('map')}Ver en el mapa</button></div>`;
     const priceNote = `${price.note ? `<p class="fare-note">${esc(price.note)}</p>` : ''}${price.warn ? `<p class="warn">${esc(price.warn)}</p>` : ''}`;
@@ -437,7 +441,8 @@ window.SVBoot = function (networkText) {
         ${tripStrip(o)}
         <p class="meta"><b class="price">${esc(price.chip)}</b> · caminas ${mins(o.walk)} min · esperas ~${mins(o.wait)} min</p>`;
     if (!open) {
-      return `<details class="card"><summary>${tag ? `<span class="mini-tag">${icon('clock')}${esc(tag)}</span>` : ''}${head}${priceNote}<span class="more">Ver el paso a paso</span></summary><ol class="steps">${stepsHtml(o)}</ol>${actions}</details>`;
+      const portalNote = portal ? `<p class="fare-note">${esc(portalSay(portal))}: ${portal.into ? `allí tomas el ${esc(portal.after.code)}` : 'lo tomas'} sin salir ni pagar otra vez.</p>` : '';
+      return `<details class="card"><summary>${tag ? `<span class="mini-tag">${icon(tagIcon)}${esc(tag)}</span>` : ''}${head}${portalNote}${priceNote}<span class="more">Ver el paso a paso</span></summary><ol class="steps">${stepsHtml(o)}</ol>${actions}</details>`;
     }
     // The main option keeps where to get on, where to get off and the actions together, on the first screen.
     const hops = rides.length === 1
@@ -494,6 +499,17 @@ window.SVBoot = function (networkText) {
     const n = bogotaNow(), day = E.dayType(n.date), label = `ahora, ${clock(n.sec)} (${DAYS[day]})`;
     return { day, time: n.sec, label, sum: `sales ${label}` };
   }
+  // A bus that enters the portal (the feeder, or a blue route like the 6-3) and the change made inside it without paying again.
+  const insideOf = name => (/^portal/i.test(name) ? `dentro del ${pretty(name)}` : `dentro de la estación ${pretty(name)}`);
+  function portalOf(o) {
+    const rides = o.legs.filter(l => l.type === 'ride'), i = rides.findIndex(l => l.change === 'portal');
+    if (i < 1) return null;
+    const before = rides[i - 1], after = rides[i], trunk = l => l.agency === 1 || l.agency === 6;
+    const bus = trunk(before) && !trunk(after) ? after : before;
+    return { bus, before, after, into: bus === before, place: after.boardPlace.name, portal: /^portal/i.test(after.boardPlace.name) };
+  }
+  // "Te deja dentro del Portal Tunal" when the bus goes in, "sale de dentro" when the rider ends the trip on it.
+  const portalSay = p => (p.into ? `El ${p.bus.code} te deja ${insideOf(p.place)}` : `El ${p.bus.code} sale de ${insideOf(p.place)}`);
   function reasonsFor(best, r) {
     const out = [];
     if (best.buses === 1) out.push('Sin transbordos');
@@ -502,8 +518,9 @@ window.SVBoot = function (networkText) {
       if (fewer) out.push(`${mins(fewer.total - best.total)} min menos que con ${busWord(fewer.buses)}`);
       else if (r.fewest === best.buses) out.push('Es el mínimo de buses posible');
       // How hard the change is matters as much as how many there are.
-      const changes = best.legs.filter(l => l.change).map(l => l.change);
-      if (changes.every(c => c === 'station')) out.push(changes.length > 1 ? 'Cambias sin salir de las estaciones' : 'Cambias sin salir de la estación');
+      const changes = best.legs.filter(l => l.change).map(l => l.change), p = portalOf(best);
+      if (p) out.push(`${portalSay(p)}: no pagas otra vez`);
+      else if (changes.every(c => c === 'station')) out.push(changes.length > 1 ? 'Cambias sin salir de las estaciones' : 'Cambias sin salir de la estación');
       else if (changes.every(c => c === 'stop')) out.push('Cambias en el mismo paradero');
     }
     if (best.walk <= 300) out.push(`Caminas solo ${mins(best.walk)} min`);
@@ -565,7 +582,7 @@ window.SVBoot = function (networkText) {
     lastOptions = [];
     const box = $('results');
     // All strips on one page share a time scale, so the longest trip fills the card.
-    const shown = [...r.ranked.slice(0, 5), ...r.groups.flatMap(g => g.options), ...(r.hint ? [r.hint.option] : [])];
+    const shown = [...r.ranked.slice(0, 5), ...(r.portal ? [r.portal] : []), ...r.groups.flatMap(g => g.options), ...(r.hint ? [r.hint.option] : [])];
     stripMax = Math.max(1, ...shown.map(o => o.total));
     const beyond = r.groups.find(g => g.buses === state.limit + 1 && g.options.length);
     const walkNote = r.walkDirect <= 1500 ? `<p>A pie son unos ${mins(r.walkDirect)} min.</p>` : '';
@@ -627,6 +644,14 @@ window.SVBoot = function (networkText) {
         : 'sus buses pasan menos seguido';
       extra = `La opción más rápida llega ${mins(best.total - quickest.total)} min antes, pero ${why}. La ves abajo.${costOf(quickest)}`;
     } else if (beyond && best.total - beyond.options[0].total >= 300) extra = `Si aceptaras ${busWord(beyond.buses)}, llegarías ${mins(best.total - beyond.options[0].total)} min antes.${costOf(beyond.options[0])}`;
+    // Many riders prefer the bus that leaves them inside the portal to walking there. Said up here only when it is a
+    // real choice: it arrives about as soon, or at most 5 minutes later while walking at least 3 minutes less.
+    const portalAlt = r.portal && !(r.walkDirect <= 1500 && r.walkDirect <= best.total) ? portalOf(r.portal) : null;
+    if (!extra && portalAlt) {
+      const lessWalk = best.walk - r.portal.walk, later = r.portal.total - best.total;
+      if (lessWalk >= 180 && later <= 300) extra = `¿Prefieres caminar menos? ${portalSay(portalAlt)} y caminas ${mins(lessWalk)} min menos${later >= 60 ? `, aunque llegas ${mins(later)} min después` : ''}. La ves abajo.${costOf(r.portal)}`;
+      else if (later < 60) extra = `${portalSay(portalAlt)} y llegas casi a la misma hora. La ves abajo.${costOf(r.portal)}`;
+    }
     if (r.night) extra = `${extra} De noche damos prioridad a caminar y esperar menos.`.trim();
     // Late at night the best trip can start with hours of waiting, and the rider should know why.
     if (!arriving && first.wait >= 1800) {
@@ -649,8 +674,19 @@ window.SVBoot = function (networkText) {
 
     // When the recommended trip is not the fastest, the fastest goes first among the others, said plainly.
     const gain = quickest !== best && !walkWins ? best.total - quickest.total : 0;
-    const others = r.ranked.slice(1), rest = (gain >= 180 ? [quickest, ...others.filter(o => o !== quickest)] : others).slice(0, 4);
-    if (rest.length) html += `<section class="group"><h3 class="group-title">Otras opciones</h3>${rest.map(o => cardHtml(o, false, gain >= 180 && o === quickest ? `La más rápida · ${mins(gain)} min antes` : '')).join('')}</section>`;
+    // The trip with a bus into the portal always gets a place, tagged with what it gives compared with the recommendation.
+    const portalTrip = r.portal && !walkWins ? r.portal : null;
+    const lead = [...(gain >= 180 ? [quickest] : []), ...(portalTrip ? [portalTrip] : [])];
+    const rest = [...lead, ...r.ranked.slice(1).filter(o => !lead.includes(o))].slice(0, 4);
+    const tagFor = o => {
+      if (o === portalTrip) {
+        const p = portalOf(o), what = p.portal ? 'Sin salir del portal' : 'Sin salir de la estación', dt = o.total - best.total, dw = best.walk - o.walk;
+        const plus = o === quickest && gain >= 180 ? `${mins(gain)} min antes` : dw >= 120 ? `caminas ${mins(dw)} min menos` : Math.abs(dt) < 60 ? 'llega igual' : dt < 0 ? `${mins(-dt)} min antes` : `${mins(dt)} min más`;
+        return { text: `${what} · ${plus}`, icon: 'bus' };
+      }
+      return gain >= 180 && o === quickest ? `La más rápida · ${mins(gain)} min antes` : '';
+    };
+    if (rest.length) html += `<section class="group"><h3 class="group-title">Otras opciones</h3>${rest.map(o => cardHtml(o, false, tagFor(o))).join('')}</section>`;
     if (best.buses > 1 && r.hint) html += hintHtml(r.hint);
     box.innerHTML = html + fineHtml();
   }
@@ -1768,7 +1804,8 @@ window.SVBoot = function (networkText) {
     const g = legProgress(l, lat, lon), left = l.aPos - g.pos, dA = dist(lat, lon, E.lat[l.alight], E.lon[l.alight]);
     const key = l.board + '>' + l.alight;
     if (dA < 90) {
-      showFollow(`Bájate aquí: ${alight}`, 'Estás en tu parada.', 'alert', pl);
+      const rides = FOLLOW.option ? FOLLOW.option.legs.filter(x => x.type === 'ride') : [], next = rides[rides.indexOf(l) + 1];
+      showFollow(`Bájate aquí: ${alight}`, next && next.change === 'portal' ? `Estás en tu parada. Sin salir ${/^portal/i.test(l.alightPlace.name) ? 'del portal' : 'de la estación'}, busca el ${next.code}.` : 'Estás en tu parada.', 'alert', pl);
       if (FOLLOW.said !== key + ':here') { FOLLOW.said = key + ':here'; alarm(`Bájate aquí. Esta es tu parada, ${alight}.`); }
       FOLLOW.warned.add(key);
       FOLLOW.arrived = key;

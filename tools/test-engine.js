@@ -44,7 +44,7 @@ const byBuses = E.recommend({ ...q, pref: 'buses' }), byTime = E.recommend({ ...
 console.log('recomienda | buses:', ride(byBuses.ranked[0]), Math.round(byBuses.ranked[0].total / 60), '| rapido:', ride(byTime.ranked[0]), Math.round(byTime.ranked[0].total / 60), '| caminar:', ride(byWalk.ranked[0]), Math.round(byWalk.ranked[0].walk / 60));
 check('recomendacion respeta el limite', [byBuses, byTime, byWalk].every(r => r.ranked.every(o => o.buses <= 2)));
 // "Menos buses": a second bus wins only when it saves more than its change costs (6 min in a station, 8 at the stop, 12 walking).
-const COST = { station: 360, stop: 480, walk: 720 }, changeCost = o => o.legs.reduce((s, l) => s + (l.change ? COST[l.change] : 0), 0);
+const COST = { station: 360, portal: 360, stop: 480, walk: 720 }, changeCost = o => o.legs.reduce((s, l) => s + (l.change ? COST[l.change] : 0), 0);
 const direct = byBuses.ranked.filter(o => o.buses === 1).sort((a, b) => a.total - b.total)[0], recB = byBuses.ranked[0];
 check('menos buses: otro bus solo si ahorra mas que el cambio', recB.buses === 1 || !direct || recB.total + changeCost(recB) < direct.total);
 check('cada transbordo dice como es (estacion, paradero o caminando)', byTime.ranked.every(o => o.legs.filter(l => l.type === 'ride').every((l, i) => (i === 0) === !l.change)));
@@ -75,6 +75,39 @@ const threeBuses = fare(leg(3, -1, -1, T0, 0, 1), leg(3, -1, -1, T0 + 1800, 0, 2
 check('tres buses con dos transbordos gratis', threeBuses.plus === 3550 && threeBuses.basic === 10650);
 const feederTrunk = fare(leg(2, -1, 5, T0), leg(1, 5, 9, T0 + 900));
 check('alimentador y troncal: un solo pasaje', feederTrunk.plus === 3550 && feederTrunk.basic === 3550 && feederTrunk.feeder);
+const blueFeeder = fare({ ...leg(3, -1, 5, T0), feeds: true }, leg(1, 5, 9, T0 + 900));
+check('bus azul que entra al portal y troncal: un solo pasaje para todos', blueFeeder.plus === 3550 && blueFeeder.basic === 3550);
+const blueOutside = fare(leg(3, -1, -1, T0), leg(1, 5, 9, T0 + 900));
+check('zonal que no entra al portal y troncal: se sigue cobrando sin personalizada', blueOutside.basic === 7100);
+
+// Feeders into the portal. The file leaves some feeder platforms out of their portal; the engine puts them back.
+const platformOf = name => { const i = E.stops.n.indexOf(name); return i < 0 ? null : E.stops.p[i] >= 0 ? E.stops.n[E.stops.p[i]] : ''; };
+for (const [platform, portal] of [['Portal Norte Alimentación', 'Portal Norte'], ['Portal Tunal Alim Plat1', 'Portal Tunal'], ['Portal Tunal Alim Plat2', 'Portal Tunal'], ['20 de Julio Alimentación', 'Portal 20 de Julio']]) {
+  const got = platformOf(platform);
+  if (got !== null) check(`${platform} es parte de ${portal}`, got.startsWith(portal));
+}
+check('ninguna plataforma de alimentadores queda fuera de su portal', E.stops.n.every((n, i) => !/\balim/i.test(n) || E.stops.k[i] || E.stops.p[i] >= 0 || !E.atStop[i].length));
+{
+  // From a feeder neighbourhood of Tunal into the city: the feeder to the portal must be considered, priced as one fare.
+  const home = stop('Br. Casa de Teja'), work = station('Av. 39');
+  const fq = { from: home, to: work, day: 0, time: 18 * 3600, limit: 2, maxWalk: 600, pref: 'buses', card: 'other' };
+  const shaped = E.feederTrips(fq), r = E.recommend(fq);
+  const viaPortal = o => o.legs.some(l => l.change === 'portal');
+  console.log('alimentador:', shaped.map(o => `${ride(o)} ${m(o.total)} min camina ${m(o.walk)}`).join(' | '), '| recomienda', ride(r.ranked[0]), '| portal', r.portal ? ride(r.portal) : '-');
+  check('busca a proposito el alimentador hasta el portal', shaped.length > 0 && shaped.every(viaPortal));
+  check('cada viaje con alimentador tiene justo los buses pedidos y cambia dentro del portal', shaped.every(o => o.legs.filter(l => l.type === 'ride').length === o.buses && o.legs.filter(l => l.change === 'portal').every(l => l.boardPlace.station >= 0)));
+  check('la opcion del portal se ofrece o se recomienda', viaPortal(r.ranked[0]) || (!!r.portal && r.ranked.includes(r.portal)));
+  check('alimentador mas troncal cuesta un pasaje aun sin personalizada', shaped.every(o => o.fare.basic === 3550));
+  check('el alimentador respeta el limite de buses', E.feederTrips({ ...fq, limit: 1 }).length === 0);
+  // Entering the portal is a comfort worth little time: another trip more than 6 minutes sooner is recommended instead.
+  // Bosa to Las Nieves at 12:30: the TC14 into Portal Sur arrives about 7 minutes after the A601 and the M47 at Madelena.
+  const bq = { from: { stop: -1, station: -1, name: 'Bosa', lat: 4.59927, lon: -74.16007 }, to: { stop: -1, station: -1, name: 'Las Nieves', lat: 4.60572, lon: -74.07561 }, day: 0, time: 12.5 * 3600, limit: 2, maxWalk: 600, pref: 'buses' };
+  const slow = E.recommend(bq);
+  console.log('portal mas lento:', ride(slow.ranked[0]), m(slow.ranked[0].total), 'min | portal', slow.portal ? `${ride(slow.portal)} ${m(slow.portal.total)} min` : '-');
+  check('si otro viaje llega mas de 6 min antes, ese se recomienda y el del portal queda como opcion', !viaPortal(slow.ranked[0]) && !!slow.portal && slow.portal.total - slow.ranked[0].total > 360);
+  const tests = [fq, bq, { ...fq, time: 7 * 3600 }, { ...bq, time: 7 * 3600 }].map(x => E.recommend({ ...x, pref: 'buses' }));
+  check('ninguna recomendacion con portal llega 6 min despues de otra opcion', tests.every(x => !viaPortal(x.ranked[0]) || x.ranked.every(o => viaPortal(o) || o.total >= x.ranked[0].total - 360)));
+}
 const realInside = E.recommend({ from: pn, to: usme, day: 0, time: 8 * 3600, limit: 2, maxWalk: 600, pref: 'time' }).ranked[0];
 check('el motor calcula precio en sus opciones', !!realInside.fare && realInside.fare.plus >= 3550);
 console.log('precio real', ride(realInside), realInside.fare.plus, realInside.fare.basic);
@@ -141,6 +174,10 @@ const pt = { stop: -1, station: -1, name: 'Punto', lat: 4.65, lon: -74.1 };
 check('punto arbitrario del mapa funciona', E.plan({ from: pt, to: jim, day: 0, time: 8 * 3600, maxBuses: 2, maxWalk: 900 }).fewest !== null);
 console.log('plataformas Jimenez', E.children[jim.station].slice(0, 5).map(i => E.stops.n[i]));
 for (const g of a.groups) for (const o of g.options) check(`limite exacto: ${g.buses} bus`, o.legs.filter(l => l.type === 'ride').length === g.buses);
+{
+  const opts = [E.recommend({ from: { stop: -1, station: -1, name: 'Kennedy', lat: 4.6223, lon: -74.1741 }, to: { stop: -1, station: -1, name: 'Las Aguas', lat: 4.602, lon: -74.07 }, day: 0, time: 7.5 * 3600, limit: 2, maxWalk: 600, pref: 'buses' }), byBuses].flatMap(r => r.ranked);
+  check('despues del ultimo bus no hay un "camina para el siguiente bus"', opts.every(o => { const i = o.legs.length - 1; return o.legs[i].end && !(o.legs[i - 1].type === 'walk' && o.legs[i - 1].fromStop !== undefined); }));
+}
 check('tiempos positivos', a.groups.every(g => g.options.every(o => o.legs.every(l => l.sec >= 0 && (l.wait === undefined || l.wait >= 0)))));
 let t = Date.now(), runs = 0; for (const [x, y] of [[pn, usme], [ame, suba], [el80, ps], [usme, pn]]) { E.plan({ from: x, to: y, day: 0, time: 8 * 3600, maxBuses: 3, maxWalk: 900 }); runs++; }
 console.log('avg plan ms', (Date.now() - t) / runs);
