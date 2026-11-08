@@ -1,39 +1,52 @@
-/* Identity: Bogotá's own colors, each with a job. Blue is the app's ground, yellow (the city's flag) means "act",
-   red, green and blue on route plates follow the bus colors riders already know, and the bus limit runs
-   green, yellow, red because every extra bus costs more effort.
-   Layout: blue band on top with the question, answer below; from 900px the band becomes a side panel.
-   Sizes are in rem so they follow the text size chosen on the phone. Smallest text 15px, controls at least 48px. */
+/* Identity: Bogotá, each color with one job (palette chosen 2026-11-07; the blue design before it is git tag
+   `diseno-azul`, see docs/volver-al-diseno-azul.md).
+   Ladrillo (the city's exposed brick) is the app's own color: the band on top and links. Yellow (the city's flag)
+   is what you tap or choose, always as a fill, never as text. Verde cerro (the eastern hills) is what went well.
+   Niebla grey is the ground and asfalto the text. Red, blue and green belong to the buses only: route plates,
+   map lines, TransMilenio stations (red) and SITP stops (blue). The one exception is the red emergency button.
+   Layout: brick band on top with the question and the hills with Monserrate, answer below; from 900px the band
+   becomes a side panel. Sizes are in rem so they follow the text size chosen on the phone. Smallest text 15px,
+   controls at least 48px. */
 :root {
-  --bg: #f2f5fc; --surface: #ffffff; --sunk: #e6ebf7; --ink: #10192e; --muted: #4f5b78; --line: #d9e0f0;
-  --top: #1b3fcb; --top-deep: #1532a6; --top-far: #1737b6; --on-top: #ffffff; --on-top-soft: #dbe4ff; --top-line: rgba(255, 255, 255, .42);
-  --sign: #ffc400; --on-sign: #10192e; --sign-edge: #c99700;
-  --red: #d9202a; --red-edge: #a1141c; --green: #0a8540; --green-edge: #06602e;
-  --link: #1b3fcb; --good: #0a7a3b; --walk: #8b97b5; --on-walk: #10192e;
-  --end: #1b3fcb; --on-end: #ffffff; --end-edge: #1532a6;
-  --wait-bg: #fff1c2; --wait-ink: #5e4500; --warn-bg: #fff1c2; --warn-ink: #5e4500;
-  --edge: #c9d3e8; --shadow: 0 1px 2px rgba(16, 40, 120, .08), 0 6px 18px rgba(16, 40, 120, .08);
-  --map-bg: #e9eef8; --map-line: #2b3a63; --map-dot: #94a1c0; --map-text: #10192e; --map-halo: #e9eef8; --me: #1b6fe0;
+  --bg: #edeff0; --surface: #ffffff; --sunk: #e1e5e7; --ink: #1b1f22; --muted: #55606a; --line: #d5dadd;
+  --top: #9a4422; --top-deep: #6e2f17; --on-top: #ffffff; --on-top-soft: #f7ded3; --top-line: rgba(255, 255, 255, .5);
+  --hill: #22362b; --hill-far: rgba(255, 255, 255, .2); --mist: rgba(255, 255, 255, .14); --cable: rgba(255, 255, 255, .55); --church: #ffffff;
+  --sign: #ffc400; --on-sign: #1b1f22; --sign-edge: #c99700;
+  --red: #d9202a; --red-edge: #a1141c; --stop: #1f4fe0; --pin: #9a4422;
+  --cerro: #2e6b50; --cerro-edge: #1d4a36; --done: #2e6b50;
+  --link: #8a3a1e; --good: #2e6b50; --walk: #8a949b; --on-walk: #1b1f22;
+  --end: #1b1f22; --on-end: #ffffff; --end-edge: #000000;
+  --routes-bg: #ffffff; --routes-ink: #1b1f22; --routes-icon: #9a4422;
+  --wait-line: #7c868d; --wait-ink: #1b1f22; --warn-bg: #fff1c2; --warn-ink: #5e4500;
+  --edge: #c3cace; --shadow: 0 1px 2px rgba(27, 31, 34, .08), 0 6px 18px rgba(27, 31, 34, .08);
+  --map-bg: #eceeef; --map-line: #2f3a40; --map-dot: #8a949b; --map-text: #1b1f22; --map-halo: #eceeef; --me: #1b6fe0;
   --font: "Rubik", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --tap: 3rem; --small: .9375rem;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0d1430; --surface: #182145; --sunk: #232d58; --ink: #eef2ff; --muted: #a9b5d6; --line: #2b3563;
-  --top: #1a2c86; --top-deep: #14226b; --top-far: #172778;
-  --link: #a9bdff; --good: #5fd897; --walk: #6f7ca3; --on-walk: #ffffff;
-  --end: #a9bdff; --on-end: #10192e; --end-edge: #6f86d6;
-  --wait-bg: #3a2f0c; --wait-ink: #ffe08a; --warn-bg: #3a2f0c; --warn-ink: #ffe08a;
-  --edge: #0a1028; --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px rgba(0, 0, 0, .25);
-  --map-bg: #111a3a; --map-line: #c5d0ee; --map-dot: #5d6a91; --map-text: #eef2ff; --map-halo: #111a3a; --me: #5aa2ff;
+  --bg: #111416; --surface: #20262b; --sunk: #2a3238; --ink: #eef1f2; --muted: #a9b3ba; --line: #2e363c;
+  --top: #7a3321; --top-deep: #4e1f12; --on-top-soft: #f2cdbf;
+  --hill: #142019; --hill-far: rgba(255, 255, 255, .12); --mist: rgba(255, 255, 255, .08); --cable: rgba(255, 255, 255, .4); --church: #e9e2da;
+  --stop: #6f97ff; --pin: #e07a52;
+  --link: #f2a487; --good: #7ccba2; --walk: #6f7a82; --on-walk: #ffffff;
+  --end: #eef1f2; --on-end: #1b1f22; --end-edge: #8a949b;
+  --routes-bg: #f1ece6;
+  --wait-line: #6f7a82; --wait-ink: #eef1f2; --warn-bg: #3a2f0c; --warn-ink: #ffe08a;
+  --edge: #0a0c0d; --shadow: 0 0 0 1px #2e363c, 0 6px 18px rgba(0, 0, 0, .3);
+  --map-bg: #161a1d; --map-line: #c9d0d4; --map-dot: #5f6a72; --map-text: #eef1f2; --map-halo: #161a1d; --me: #5aa2ff;
   color-scheme: dark;
 } }
 :root[data-theme="dark"] {
-  --bg: #0d1430; --surface: #182145; --sunk: #232d58; --ink: #eef2ff; --muted: #a9b5d6; --line: #2b3563;
-  --top: #1a2c86; --top-deep: #14226b; --top-far: #172778;
-  --link: #a9bdff; --good: #5fd897; --walk: #6f7ca3; --on-walk: #ffffff;
-  --end: #a9bdff; --on-end: #10192e; --end-edge: #6f86d6;
-  --wait-bg: #3a2f0c; --wait-ink: #ffe08a; --warn-bg: #3a2f0c; --warn-ink: #ffe08a;
-  --edge: #0a1028; --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px rgba(0, 0, 0, .25);
-  --map-bg: #111a3a; --map-line: #c5d0ee; --map-dot: #5d6a91; --map-text: #eef2ff; --map-halo: #111a3a; --me: #5aa2ff;
+  --bg: #111416; --surface: #20262b; --sunk: #2a3238; --ink: #eef1f2; --muted: #a9b3ba; --line: #2e363c;
+  --top: #7a3321; --top-deep: #4e1f12; --on-top-soft: #f2cdbf;
+  --hill: #142019; --hill-far: rgba(255, 255, 255, .12); --mist: rgba(255, 255, 255, .08); --cable: rgba(255, 255, 255, .4); --church: #e9e2da;
+  --stop: #6f97ff; --pin: #e07a52;
+  --link: #f2a487; --good: #7ccba2; --walk: #6f7a82; --on-walk: #ffffff;
+  --end: #eef1f2; --on-end: #1b1f22; --end-edge: #8a949b;
+  --routes-bg: #f1ece6;
+  --wait-line: #6f7a82; --wait-ink: #eef1f2; --warn-bg: #3a2f0c; --warn-ink: #ffe08a;
+  --edge: #0a0c0d; --shadow: 0 0 0 1px #2e363c, 0 6px 18px rgba(0, 0, 0, .3);
+  --map-bg: #161a1d; --map-line: #c9d0d4; --map-dot: #5f6a72; --map-text: #eef1f2; --map-halo: #161a1d; --me: #5aa2ff;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -48,7 +61,7 @@ button { cursor: pointer; }
 :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 .top :focus-visible, .sheet-head :focus-visible { outline-color: var(--sign); }
 .route-fields :focus-visible { outline-color: var(--link); outline-offset: -3px; }
-.follow[data-level="alert"] :focus-visible, .follow[data-level="good"] :focus-visible { outline-color: #10192e; }
+.follow[data-level="alert"] :focus-visible, .follow[data-level="good"] :focus-visible { outline-color: #1b1f22; }
 .map-wrap canvas:focus-visible { outline-offset: -4px; }
 [tabindex="-1"]:focus { outline: none; }
 .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
@@ -64,12 +77,17 @@ h1, h2, h3, p { margin: 0; }
 
 /* ---------- Blue band ---------- */
 .shell { display: grid; grid-template-columns: minmax(0, 1fr); }
-.top { position: relative; background: var(--top); color: var(--on-top); border-radius: 0 0 1.5rem 1.5rem; overflow: hidden; padding-block: .875rem 3.25rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
-.hills { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 2.75rem; display: block; pointer-events: none; }
-.hills path { stroke-linejoin: round; stroke-width: 3; }
-.hills .far { fill: var(--top-far); stroke: var(--top-far); }
-.hills .near-hill { fill: var(--top-deep); stroke: var(--top-deep); }
-.hills .church { fill: var(--top-far); stroke: none; }
+.top { position: relative; background: var(--top); color: var(--on-top); border-radius: 0 0 1.5rem 1.5rem; overflow: hidden; padding-block: .875rem 4.5rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
+/* The eastern hills in fog, with Monserrate's church on the tallest peak and its cable car. The ridges stretch with
+   the width; the church is drawn apart so it never stretches, and sits on the peak (68.3 % across, 75 % up). */
+.hills { position: absolute; left: 0; right: 0; bottom: 0; height: 4rem; pointer-events: none; }
+.hills .ridge { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hills .far { fill: var(--hill-far); }
+.hills .near-hill { fill: var(--hill); }
+.hills .mist { fill: var(--mist); }
+.hills .cable { fill: none; stroke: var(--cable); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.hills .cabin { fill: var(--cable); }
+.hills .church { position: absolute; left: calc(68.33% - .4375rem); bottom: calc(75% - 1px); width: .875rem; height: .9375rem; fill: var(--church); display: block; }
 .mast { display: flex; align-items: center; justify-content: space-between; gap: .75rem; position: relative; }
 .brand { display: flex; align-items: center; gap: .5rem; font: 800 1.375rem/1 var(--font); letter-spacing: -.01em; color: var(--on-top); }
 .brand svg { width: 1.75rem; height: 1.75rem; flex: none; }
@@ -82,7 +100,8 @@ h1, h2, h3, p { margin: 0; }
 .sum-text { display: grid; gap: .0625rem; min-width: 0; }
 .sum-text b { font-weight: 700; font-size: 1.0625rem; overflow-wrap: anywhere; }
 .sum-text small { color: var(--on-top-soft); font-size: var(--small); }
-.change { color: var(--sign); font-weight: 700; flex: none; font-size: var(--small); }
+/* Yellow is never text: on brick it would read poorly, so "Cambiar" is white and underlined like a link. */
+.change { color: var(--on-top); font-weight: 700; flex: none; font-size: var(--small); text-decoration: underline; text-underline-offset: 3px; }
 #closeForm { display: none; }
 
 /* First step: where from and where to, nothing assumed. The other options appear once there is a trip to adjust. */
@@ -96,14 +115,14 @@ h1, h2, h3, p { margin: 0; }
 .sum-swap { flex: none; background: rgba(255, 255, 255, .16); color: var(--on-top); }
 .panel.is-first .limit-ctl { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .75rem; }
 .panel.is-first .limit { grid-template-columns: repeat(3, 3rem); }
-.panel.is-first .limit button { min-height: var(--tap); font-size: 1.25rem; }
+.panel.is-first .limit button { min-height: 3.375rem; font-size: 1.125rem; }
 .panel.is-first .limit button small { display: none; }
 
 /* From and to, joined by the line of a route */
 .route-fields { display: grid; grid-template-columns: 1.625rem minmax(0, 1fr) var(--tap); align-items: stretch; background: var(--surface); color: var(--ink); border-radius: 1.125rem; padding: .25rem .375rem .25rem .625rem; box-shadow: 0 4px 0 var(--top-deep); }
 .route-rail { display: flex; flex-direction: column; align-items: center; justify-content: center; padding-block: .875rem; }
-.route-rail .from-dot { width: .75rem; height: .75rem; border-radius: 50%; border: 3px solid var(--link); flex: none; }
-.route-rail .to-pin { color: var(--red); width: 1.25rem; height: 1.25rem; flex: none; }
+.route-rail .from-dot { width: .75rem; height: .75rem; border-radius: 50%; border: 3px solid var(--ink); flex: none; }
+.route-rail .to-pin { color: var(--pin); width: 1.25rem; height: 1.25rem; flex: none; }
 .route-rail .link { flex: 1; width: 0; border-left: 3px dotted var(--walk); margin-block: .25rem; }
 .stack { display: grid; min-width: 0; }
 .field { width: 100%; min-height: 3.25rem; display: grid; align-content: center; gap: 0; text-align: left; background: none; border: 0; border-radius: .625rem; padding: .25rem .5rem; min-width: 0; color: inherit; }
@@ -116,12 +135,14 @@ h1, h2, h3, p { margin: 0; }
 .ctl { display: grid; gap: .375rem; min-width: 0; }
 .ctl > .lbl { font-weight: 600; font-size: var(--small); color: var(--on-top); }
 .limit { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; padding-bottom: .25rem; }
-.limit button { --c: var(--green); --on: #ffffff; --deep: var(--green-edge); min-height: 4.25rem; border: 0; border-radius: .875rem; background: var(--surface); color: var(--ink); font: 800 1.625rem/1 var(--font); display: grid; place-content: center; gap: .125rem; padding: .25rem .0625rem; box-shadow: 0 4px 0 var(--c); transition: transform .06s ease; }
-.limit [data-limit="2"] { --c: var(--sign); --on: var(--on-sign); --deep: var(--sign-edge); }
-.limit [data-limit="3"] { --c: var(--red); --on: #ffffff; --deep: var(--red-edge); }
+/* No traffic light: 3 buses is a fair choice, not a forbidden one. Each number draws its buses, and the choice
+   turns yellow like every other choice in the app. */
+.limit button { min-height: 4.25rem; border: 0; border-radius: .875rem; background: var(--surface); color: var(--ink); font: 800 1.625rem/1 var(--font); display: grid; place-content: center; justify-items: center; gap: .1875rem; padding: .25rem .0625rem; box-shadow: 0 4px 0 var(--top-deep); transition: transform .06s ease; }
 .limit button small { font: 500 var(--small)/1.1 var(--font); letter-spacing: -.01em; color: var(--muted); }
-.limit button[aria-pressed="true"] { background: var(--c); color: var(--on); box-shadow: 0 2px 0 var(--deep); transform: translateY(2px); }
-.limit button[aria-pressed="true"] small { color: var(--on); }
+.limit .buses { display: flex; gap: 2px; color: var(--muted); }
+.limit .buses svg { width: .5rem; height: .625rem; fill: currentColor; display: block; }
+.limit button[aria-pressed="true"] { background: var(--sign); color: var(--on-sign); box-shadow: 0 2px 0 var(--sign-edge); transform: translateY(2px); }
+.limit button[aria-pressed="true"] small, .limit button[aria-pressed="true"] .buses { color: var(--on-sign); }
 .chips { display: flex; flex-wrap: wrap; gap: .375rem; }
 .chip { min-height: var(--tap); padding: 0 .875rem; border-radius: 1.5rem; border: 2px solid var(--top-line); background: transparent; color: var(--on-top); font-size: var(--small); font-weight: 500; }
 .chip[aria-pressed="true"] { background: var(--sign); color: var(--on-sign); border-color: var(--sign); font-weight: 600; }
@@ -158,7 +179,9 @@ h1, h2, h3, p { margin: 0; }
 .card > summary::-webkit-details-marker { display: none; }
 .card-main { padding: .875rem .875rem .75rem; display: grid; gap: .5rem; }
 /* A sticker that sits on the edge of the card, so the recommended option is obvious at a glance. */
-.mini-tag { display: inline-block; margin-bottom: .375rem; background: var(--green); color: #ffffff; font: 700 var(--small)/1.2 var(--font); padding: .25rem .5rem; border-radius: .4rem; }
+/* "La más rápida" is information, not a recommendation: a border and a clock, so only the yellow sticker shouts. */
+.mini-tag { display: inline-flex; align-items: center; gap: .3125rem; margin-bottom: .375rem; background: transparent; color: var(--ink); border: 1.5px solid var(--ink); font: 700 var(--small)/1.2 var(--font); padding: .1875rem .5rem; border-radius: .4rem; }
+.mini-tag .i { width: 1em; height: 1em; vertical-align: 0; }
 .tagline { justify-self: start; margin-top: -1.5rem; background: var(--sign); color: var(--on-sign); font: 700 var(--small)/1 var(--font); padding: .375rem .625rem; border-radius: .5rem; box-shadow: 0 2px 0 var(--sign-edge); transform: rotate(-1.5deg); }
 .card.has-tag { margin-top: .5rem; }
 .head { display: flex; align-items: baseline; justify-content: space-between; gap: .125rem .625rem; flex-wrap: wrap; }
@@ -174,7 +197,7 @@ h1, h2, h3, p { margin: 0; }
 .seg:only-of-type { border-radius: .625rem; }
 .strip-rest { min-width: 0; }
 .seg.walk { background: var(--sunk); color: var(--ink); }
-.seg.wait { background: var(--wait-bg); color: var(--wait-ink); }
+.seg.wait { background: transparent; color: var(--wait-ink); border: 1.5px dashed var(--wait-line); }
 .seg.bus { font-weight: 700; font-size: 1.0625rem; gap: .375rem; }
 .seg.bus small { font-weight: 500; font-size: var(--small); }
 /* Set by fitStrips when a trip has too many pieces for the width. */
@@ -248,8 +271,8 @@ h1, h2, h3, p { margin: 0; }
 .opt { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr); gap: .625rem; align-items: center; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: .5625rem .125rem; min-height: 3.25rem; color: inherit; }
 .opt-i { width: 2.25rem; height: 2.25rem; border-radius: 50%; display: grid; place-items: center; background: var(--sunk); color: var(--ink); }
 .opt-i.k-station { background: var(--red); color: #ffffff; }
-.opt-i.k-stop { background: var(--link); color: var(--surface); }
-.opt-i.k-geo, .opt-i.k-point { background: var(--green); color: #ffffff; }
+.opt-i.k-stop { background: var(--stop); color: var(--surface); }
+.opt-i.k-geo, .opt-i.k-point { background: var(--pin); color: #ffffff; }
 .opt-i.k-me { background: var(--sign); color: var(--on-sign); }
 .opt-t { display: grid; gap: .0625rem; min-width: 0; }
 .opt b { font-weight: 600; }
@@ -261,9 +284,10 @@ h1, h2, h3, p { margin: 0; }
 .cat { min-height: 3.25rem; border: 0; border-radius: .875rem; padding: .25rem .625rem; font-weight: 600; font-size: var(--small); text-align: left; color: #ffffff; transition: transform .06s ease; }
 .cat:active { transform: translateY(2px); }
 .cat:last-child:nth-child(odd) { grid-column: 1 / -1; }
-.cat.c-red { background: var(--red); box-shadow: 0 3px 0 var(--red-edge); }
-.cat.c-green { background: var(--green); box-shadow: 0 3px 0 var(--green-edge); }
-.cat.c-blue { background: #1f4fe0; box-shadow: 0 3px 0 #1636a8; }
+/* Place categories use the app's own colors, never the bus colors. */
+.cat.c-red { background: #9a4422; box-shadow: 0 3px 0 #6e2f17; }
+.cat.c-green { background: var(--cerro); box-shadow: 0 3px 0 var(--cerro-edge); }
+.cat.c-blue { background: #1b1f22; box-shadow: 0 3px 0 #000000; }
 .cat.c-yellow { background: var(--sign); color: var(--on-sign); box-shadow: 0 3px 0 var(--sign-edge); }
 
 .map-wrap { position: relative; flex: 1; min-height: 0; background: var(--map-bg); }
@@ -287,7 +311,7 @@ h1, h2, h3, p { margin: 0; }
 .follow { padding-block: .875rem; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: .625rem; background: var(--surface); }
 .follow[data-level="alert"] { background: var(--sign); color: var(--on-sign); }
 .follow[data-level="alert"] #fSub, .follow[data-level="alert"] .fine-line { color: var(--on-sign); }
-.follow[data-level="good"] { background: var(--green); color: #ffffff; }
+.follow[data-level="good"] { background: var(--done); color: #ffffff; }
 .follow[data-level="good"] #fSub, .follow[data-level="good"] .fine-line { color: #ffffff; }
 .follow-main { display: flex; gap: .625rem; align-items: flex-start; }
 .follow-text { min-width: 0; display: grid; gap: .125rem; }
@@ -296,13 +320,12 @@ h1, h2, h3, p { margin: 0; }
 .follow-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
 .follow-actions .btn { padding: 0 .375rem; text-align: center; text-decoration: none; }
 #fRecalc, #fEnd { grid-column: 1 / -1; }
-.follow[data-level="alert"] .btn, .follow[data-level="good"] .btn { background: #ffffff; color: #10192e; box-shadow: 0 3px 0 rgba(0, 0, 0, .25); }
+.follow[data-level="alert"] .btn, .follow[data-level="good"] .btn { background: #ffffff; color: #1b1f22; box-shadow: 0 3px 0 rgba(0, 0, 0, .25); }
 .follow .btn.sos, .follow[data-level] .btn.sos { background: var(--red); color: #ffffff; box-shadow: 0 3px 0 var(--red-edge); }
-/* Leaving trip mode is its own kind of action: solid blue, apart from the white controls and from the red emergency button. */
+/* Leaving trip mode is its own kind of action: solid asfalto, apart from the white controls and from the red emergency button. */
 .follow .btn.end { background: var(--end); color: var(--on-end); box-shadow: 0 3px 0 var(--end-edge); }
 /* Yellow and green screens look the same in both themes, so the button takes fixed colors that stand out on each. */
-.follow[data-level="alert"] .btn.end { background: #1b3fcb; color: #ffffff; box-shadow: 0 3px 0 #1532a6; }
-.follow[data-level="good"] .btn.end { background: #10192e; color: #ffffff; box-shadow: 0 3px 0 rgba(0, 0, 0, .35); }
+.follow[data-level="alert"] .btn.end, .follow[data-level="good"] .btn.end { background: #1b1f22; color: #ffffff; box-shadow: 0 3px 0 rgba(0, 0, 0, .35); }
 @media (max-width: 339px) { .follow .btn.sos .i { display: none; } }
 .sheet:not(.glance) #fHint { display: none; }
 /* Glance screen: one instruction filling the phone, so it comes out of the pocket as little as possible. */
@@ -328,7 +351,7 @@ h1, h2, h3, p { margin: 0; }
 }
 @media (min-width: 900px) {
   .shell { grid-template-columns: 26rem minmax(0, 1fr); min-height: 100vh; align-items: start; }
-  .top { position: sticky; top: 0; min-height: 100vh; max-height: 100vh; overflow-y: auto; align-content: start; border-radius: 0 1.75rem 1.75rem 0; padding: 1.25rem 1.25rem 4rem; }
+  .top { position: sticky; top: 0; min-height: 100vh; max-height: 100vh; overflow-y: auto; align-content: start; border-radius: 0 1.75rem 1.75rem 0; padding: 1.25rem 1.25rem 5.25rem; }
   .hills { position: fixed; left: 0; right: auto; width: 26rem; bottom: 0; }
   .results { padding: 1.5rem 2rem 3rem; max-width: 50rem; }
   .ask { font-size: 2.25rem; }
@@ -427,8 +450,11 @@ html[data-lite] .card, html[data-lite] .enable, html[data-lite] .near { border: 
 .center-pin svg { display: block; width: 100%; height: 100%; }
 /* «Rutas»: the header button, the search screen and the stops of a route as a line */
 .mast-actions { display: flex; align-items: center; gap: .5rem; }
-.mast-btn { display: inline-flex; align-items: center; gap: .375rem; min-height: 2.75rem; padding: 0 .875rem; border-radius: 1.5rem; border: 2px solid var(--top-line); background: transparent; color: var(--on-top); font-size: var(--small); font-weight: 600; }
-.mast-btn:active { transform: translateY(1px); }
+/* «Rutas» is easy to miss, so it is the one solid light button on the band, chunky like the others, with the bus
+   in brick. Not yellow: yellow stays for the main action of each screen. */
+.mast-btn { display: inline-flex; align-items: center; gap: .375rem; min-height: 2.75rem; padding: 0 1rem 0 .75rem; border-radius: 1.5rem; border: 0; background: var(--routes-bg); color: var(--routes-ink); font-size: var(--small); font-weight: 700; box-shadow: 0 3px 0 var(--top-deep); transition: transform .06s ease, box-shadow .06s ease; }
+.mast-btn .i { color: var(--routes-icon); }
+.mast-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--top-deep); }
 .sheet-sub { background: var(--top); display: flex; gap: .5rem; overflow-x: auto; scrollbar-width: none; padding: 0 max(16px, env(safe-area-inset-right, 0px)) .75rem max(16px, env(safe-area-inset-left, 0px)); }
 .sheet-sub::-webkit-scrollbar { display: none; }
 .sheet-sub .chip { flex: none; }
@@ -445,13 +471,13 @@ html[data-lite] .card, html[data-lite] .enable, html[data-lite] .near { border: 
 .stops-key span { display: inline-flex; align-items: center; gap: .375rem; }
 .stops-key span::before { content: ''; width: .6875rem; height: .6875rem; border-radius: 50%; box-sizing: border-box; }
 .stops-key .k-st::before { background: var(--red); }
-.stops-key .k-pd::before { border: 2.5px solid var(--link); background: var(--surface); }
+.stops-key .k-pd::before { border: 2.5px solid var(--stop); background: var(--surface); }
 .stops-line ol { list-style: none; margin: 0; padding: 0; }
 .stops-line li { position: relative; padding-left: 1.625rem; }
 .stops-line li::before { content: ''; position: absolute; left: .4375rem; top: 0; bottom: 0; width: 3px; background: var(--line); }
 .stops-line li:first-child::before { top: 50%; }
 .stops-line li:last-child::before { bottom: 50%; }
-.stops-line li::after { content: ''; position: absolute; left: .1875rem; top: 50%; width: .6875rem; height: .6875rem; margin-top: -.34375rem; border-radius: 50%; box-sizing: border-box; border: 2.5px solid var(--link); background: var(--surface); }
+.stops-line li::after { content: ''; position: absolute; left: .1875rem; top: 50%; width: .6875rem; height: .6875rem; margin-top: -.34375rem; border-radius: 50%; box-sizing: border-box; border: 2.5px solid var(--stop); background: var(--surface); }
 .stops-line li.is-station::after { border-color: var(--red); background: var(--red); }
 .stop-link { display: block; width: 100%; min-height: 2.75rem; padding: .375rem 0; background: none; border: 0; border-bottom: 1px solid var(--line); text-align: left; color: var(--ink); font-size: var(--small); }
 .stops-line li:last-child .stop-link { border-bottom: 0; }

@@ -437,7 +437,7 @@ window.SVBoot = function (networkText) {
         ${tripStrip(o)}
         <p class="meta"><b class="price">${esc(price.chip)}</b> · caminas ${mins(o.walk)} min · esperas ~${mins(o.wait)} min</p>`;
     if (!open) {
-      return `<details class="card"><summary>${tag ? `<span class="mini-tag">${esc(tag)}</span>` : ''}${head}${priceNote}<span class="more">Ver el paso a paso</span></summary><ol class="steps">${stepsHtml(o)}</ol>${actions}</details>`;
+      return `<details class="card"><summary>${tag ? `<span class="mini-tag">${icon('clock')}${esc(tag)}</span>` : ''}${head}${priceNote}<span class="more">Ver el paso a paso</span></summary><ol class="steps">${stepsHtml(o)}</ol>${actions}</details>`;
     }
     // The main option keeps where to get on, where to get off and the actions together, on the first screen.
     const hops = rides.length === 1
@@ -1184,14 +1184,14 @@ window.SVBoot = function (networkText) {
   // The map has its own light or dark look, chosen on the map itself. Light by default, even on a dark phone: the dark
   // street map hides street names and places, and the map is where people check that a place is the right one.
   const MAP_LOOK = {
-    light: { style: 'liberty', bg: '#eef1f6', line: '#2b3a63', dot: '#7d89a8', text: '#10192e', halo: '#ffffff', surface: '#ffffff', muted: '#4f5b78', casing: '#10192e', dirs: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'] },
-    dark: { style: 'dark', bg: '#111a3a', line: '#c5d0ee', dot: '#5d6a91', text: '#eef2ff', halo: '#111a3a', surface: '#182145', muted: '#a9b5d6', casing: '#05081a', dirs: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300'] },
+    light: { style: 'liberty', bg: '#eceeef', line: '#2f3a40', dot: '#7f8a91', text: '#1b1f22', halo: '#ffffff', surface: '#ffffff', muted: '#55606a', casing: '#1b1f22', dirs: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'] },
+    dark: { style: 'dark', bg: '#161a1d', line: '#c9d0d4', dot: '#5f6a72', text: '#eef1f2', halo: '#161a1d', surface: '#20262b', muted: '#a9b3ba', casing: '#050607', dirs: ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300'] },
   };
   // Directions of one route: colors checked for color blindness on both map looks (also in app.css as --dir-1 to --dir-6).
   const DIR_COUNT = 6;
   const legColor = l => (l.dir !== undefined ? look().dirs[l.dir % DIR_COUNT] : l.color);
   const look = () => MAP_LOOK[state.mapDark ? 'dark' : 'light'];
-  const PIN = '#d9202a';
+  const PIN = '#9a4422';
   function renderMapLook() {
     const b = $('mapStyle');
     b.setAttribute('aria-pressed', String(state.mapDark));

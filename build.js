@@ -48,7 +48,7 @@ const webHead = `<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Sin Vueltas</title>
 <meta name="description" content="Rutas de TransMilenio y SITP en Bogotá con el número de buses que tú decides. App no oficial.">
-<meta name="theme-color" content="#1b3fcb">
+<meta name="theme-color" content="#9a4422">
 ${config.siteUrl ? `<meta property="og:title" content="Sin Vueltas">
 <meta property="og:description" content="Rutas de TransMilenio y SITP en Bogotá con el número de buses que tú decides.">
 <meta property="og:type" content="website">
@@ -79,7 +79,7 @@ write('site/shapes.json', streets);
 write('site/grid.json', grid);
 write('site/manifest.webmanifest', JSON.stringify({
   name: 'Sin Vueltas', short_name: 'Sin Vueltas', description: 'Rutas de TransMilenio y SITP con el número de buses que tú decides.',
-  lang: 'es', start_url: '.', scope: '.', display: 'standalone', background_color: '#1b3fcb', theme_color: '#1b3fcb',
+  lang: 'es', start_url: '.', scope: '.', display: 'standalone', background_color: '#9a4422', theme_color: '#9a4422',
   icons: [{ src: 'icon-192.png', sizes: '192x192', type: 'image/png' }, { src: 'icon-512.png', sizes: '512x512', type: 'image/png' }, { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }],
 }, null, 1));
 for (const f of ['icon.svg', 'icon-180.png', 'icon-192.png', 'icon-512.png']) fs.copyFileSync(path.join(__dirname, 'assets', f), path.join(__dirname, 'site', f));
