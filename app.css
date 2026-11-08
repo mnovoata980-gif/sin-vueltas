@@ -498,3 +498,64 @@ html[data-lite] .card, html[data-lite] .enable, html[data-lite] .near { border: 
 /* Two routes with the same code (a trunk 7 and a zonal 7) */
 .twin { margin: .5rem 0 0; padding: .5rem .75rem; border-radius: .75rem; background: var(--sunk); font-size: var(--small); }
 .twin .linkish { display: inline; min-height: 0; margin-left: .25rem; }
+
+/* ---------- By bike or on an electric vehicle ----------
+   The way of going sits on top of the band: yellow marks the choice, as everywhere else.
+   Green is bike infrastructure (the hills' green: what went well), grey a quiet street, amber stripes an avenue with
+   nothing for bikes (the app's warning colors), dotted where the rider pushes. Motor vehicles ride in asphalt. */
+:root {
+  --bk-ciclorruta: #2e6b50; --bk-ciclovia: #2e6b50; --bk-bicicarril: #3f8a63; --bk-busbici: #8dbba3; --bk-compartida: #8dbba3; --bk-peatonal: #8dbba3;
+  --bk-calle: #b3bcc1; --bk-avenida: #c98a00; --bk-avenida-2: #f4d77e; --bk-road: #3b4348; --bk-walk: var(--walk);
+  --good-bg: #e3f0e8; --good-ink: #1d4a36;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bk-calle: #5f6a72; --bk-busbici: #4f8a6e; --bk-compartida: #4f8a6e; --bk-peatonal: #4f8a6e; --bk-avenida-2: #6b5212; --bk-road: #c9d0d4; --good-bg: #17382a; --good-ink: #bfe6d0; } }
+:root[data-theme="dark"] { --bk-calle: #5f6a72; --bk-busbici: #4f8a6e; --bk-compartida: #4f8a6e; --bk-peatonal: #4f8a6e; --bk-avenida-2: #6b5212; --bk-road: #c9d0d4; --good-bg: #17382a; --good-ink: #bfe6d0; }
+.modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .25rem; padding: .25rem; border-radius: 1rem; background: var(--top-deep); position: relative; }
+.mode { min-height: var(--tap); border: 0; border-radius: .75rem; background: transparent; color: var(--on-top); font-weight: 700; font-size: var(--small); display: inline-flex; align-items: center; justify-content: center; gap: .375rem; padding: 0 .25rem; min-width: 0; }
+.mode .i { width: 1.375em; height: 1.375em; }
+.mode[aria-pressed="true"] { background: var(--sign); color: var(--on-sign); box-shadow: 0 2px 0 var(--sign-edge); }
+.wheel-only { display: none; }
+body[data-travel="bici"] .wheel-only, body[data-travel="electrico"] .wheel-only { display: grid; }
+body[data-travel="bici"] .bus-only, body[data-travel="electrico"] .bus-only { display: none; }
+.chip.veh { display: inline-flex; align-items: center; gap: .375rem; }
+.chip.veh .i { width: 1.375em; height: 1.375em; }
+.chip.veh-help { border-style: dashed; }
+.bk-strip .seg { min-height: 1.875rem; color: #ffffff; }
+.seg.bk-ciclorruta, .seg.bk-ciclovia { background: var(--bk-ciclorruta); }
+.seg.bk-bicicarril { background: var(--bk-bicicarril); }
+.seg.bk-busbici, .seg.bk-compartida, .seg.bk-peatonal { background: var(--bk-compartida); color: var(--ink); }
+.seg.bk-calle { background: var(--bk-calle); color: var(--ink); }
+.seg.bk-avenida { background: repeating-linear-gradient(-45deg, var(--bk-avenida) 0 5px, var(--bk-avenida-2) 5px 10px); color: var(--ink); }
+.seg.bk-avenida .n { background: var(--bk-avenida-2); border-radius: .25rem; padding: 0 .25rem; }
+.seg.bk-road { background: var(--bk-road); color: var(--surface); }
+.seg.bk-walk { background: var(--sunk); color: var(--ink); }
+.bk-step.walk .rail::before { border-left-color: var(--bk-walk); }
+.meta b { font-weight: 700; }
+.notice.good-note { background: var(--good-bg); color: var(--good-ink); }
+.bus-compare { font-size: var(--small); }
+.bus-compare .linkish { display: inline; min-height: 0; margin-left: .25rem; }
+.bike-intro .bike-stats { display: flex; flex-wrap: wrap; gap: .25rem 1rem; color: var(--ink); font-size: var(--small); }
+.bike-intro .bike-stats b { font-size: 1.25rem; font-weight: 800; color: var(--good); }
+.veh-card { background: var(--surface); border-radius: 1.125rem; box-shadow: var(--shadow); padding: 1rem; display: grid; gap: .5rem; }
+.veh-card .group-title { display: flex; align-items: center; gap: .5rem; }
+.veh-card .group-title .i { width: 1.75rem; height: 1.75rem; }
+.veh-card .linkish { justify-self: start; }
+.veh-rules { list-style: none; margin: 0; padding: 0; display: grid; gap: .25rem; font-size: var(--small); }
+.veh-rules li { display: grid; grid-template-columns: 1.375rem minmax(0, 1fr); gap: .375rem; align-items: start; }
+.veh-rules li .i { width: 1.25rem; height: 1.25rem; margin-top: .05em; }
+.veh-rules li.yes .i { color: var(--good); }
+.veh-rules li.no { color: var(--muted); }
+.veh-rules li.no b { color: var(--ink); }
+.veh-list .hint { padding-top: 1rem; }
+.veh-guide { background: var(--surface); border-radius: 1rem; box-shadow: var(--shadow); padding: .875rem; display: grid; gap: .5rem; margin-bottom: .75rem; }
+.veh-guide.is-mine { box-shadow: inset 0 0 0 2.5px var(--good), var(--shadow); }
+.veh-guide h4 { display: flex; align-items: center; gap: .5rem; font: 700 1.125rem/1.2 var(--font); margin: 0; }
+.veh-guide h4 .i { width: 1.75rem; height: 1.75rem; }
+.veh-how { font-weight: 500; }
+.bk-badge { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: .875rem; background: var(--bk-ciclorruta); color: #ffffff; }
+.bk-badge .i { width: 1.75rem; height: 1.75rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .mode { transition: background-color .15s ease, color .15s ease; }
+  .modes.switched .mode[aria-pressed="true"] { animation: sv-pop .28s var(--ease-out); }
+  .bk-strip .seg { animation: sv-fade .3s ease-out both; }
+}

@@ -24,6 +24,13 @@ window.SVBoot = function (networkText) {
     target: '<circle cx="12" cy="12" r="4"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>',
     down: '<path d="m6 9.5 6 6 6-6"/>',
     recent: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    bike: '<circle cx="5.5" cy="16" r="3.5"/><circle cx="18.5" cy="16" r="3.5"/><path d="M5.5 16 9.5 8.5h7M12 16 9.5 8.5M12 16l4.5-7.5 2 7.5M5.5 16H12M8 6h3M15.5 6h2l-1 2.5"/>',
+    ebike: '<circle cx="5.5" cy="16" r="3.5"/><circle cx="18.5" cy="16" r="3.5"/><path d="M5.5 16 9.5 8.5h7M12 16 9.5 8.5M12 16l4.5-7.5 2 7.5M5.5 16H12M15.5 6h2l-1 2.5M9.5 2.5 7.8 5.2h2.4L8.5 7.8"/>',
+    scooter: '<circle cx="5.5" cy="18" r="2.5"/><circle cx="18.5" cy="18" r="2.5"/><path d="M8 18h8M16.6 15.8 14.5 4.5h-2.5M14.5 4.5H17"/>',
+    moped: '<circle cx="5.5" cy="17.5" r="2.7"/><circle cx="18.5" cy="17.5" r="2.7"/><path d="M8.2 17.5h7.6M3.5 13h7.5l1.5 3.5M15.5 16.5 14 6h-2M14 6h2.5M4.5 13l.8-2.5H10"/>',
+    moto: '<circle cx="5" cy="17" r="3"/><circle cx="19" cy="17" r="3"/><path d="M8 17h8l-3.5-5H7L5 17M12.5 12l2-3h3l1.5 8M14.5 9h-2M17.5 9l1-2.5h2"/>',
+    bolt: '<path d="M13 2.5 5.5 13.5h5.5l-1 8 7.5-11h-5.5z"/>',
+    cross: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
   };
   const icon = name => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 
@@ -231,6 +238,11 @@ window.SVBoot = function (networkText) {
     card: saved && saved.card || 'unknown', voice: !(saved && saved.voice === false),
     lite: saved && saved.lite || 'auto', glance: !(saved && saved.glance === false), mapDark: !!(saved && saved.mapDark),
     mode: 'now', day: 0, time: '08:00', example: false,
+    // How the rider goes: by bus, by bike (bicycle or e-bike) or on an electric vehicle, and which one.
+    travel: saved && ['bus', 'bici', 'electrico'].includes(saved.travel) ? saved.travel : 'bus',
+    bikeVeh: saved && ['bici', 'ebici'].includes(saved.bikeVeh) ? saved.bikeVeh : 'bici',
+    elecVeh: saved && ['patineta', 'ciclomotor', 'moto'].includes(saved.elecVeh) ? saved.elecVeh : 'patineta',
+    bikePref: saved && saved.bikePref === 'direct' ? 'direct' : 'safe',
     lastTo: (saved && saved.lastTo || []).map(rehydrate),
     recent: (saved && saved.recent || []).map(r => ({ key: r.key, from: rehydrate(r.from), to: rehydrate(r.to) })),
     favs: { casa: saved && saved.favs ? rehydrate(saved.favs.casa) : null, trabajo: saved && saved.favs ? rehydrate(saved.favs.trabajo) : null },
@@ -240,7 +252,7 @@ window.SVBoot = function (networkText) {
   const persist = () => {
     if (state.example) return;
     const slim = p => (p && p.kind !== 'gps' ? plain(p) : null);
-    store.set(SAVE, { at: Date.now(), limit: state.limit, walk: state.walk, pref: state.pref, card: state.card, voice: state.voice, lite: state.lite, glance: state.glance, mapDark: state.mapDark,
+    store.set(SAVE, { at: Date.now(), travel: state.travel, bikeVeh: state.bikeVeh, elecVeh: state.elecVeh, bikePref: state.bikePref, limit: state.limit, walk: state.walk, pref: state.pref, card: state.card, voice: state.voice, lite: state.lite, glance: state.glance, mapDark: state.mapDark,
       lastTo: state.lastTo.map(plain), recent: state.recent.map(r => ({ key: r.key, from: plain(r.from), to: plain(r.to) })), favs: { casa: slim(state.favs.casa), trabajo: slim(state.favs.trabajo) } });
   };
   // Light mode: the head script reads the phone's signals, and the rider can override them from the footer.
@@ -323,7 +335,20 @@ window.SVBoot = function (networkText) {
     document.querySelectorAll('[data-card]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.card === state.card)));
     $('when').hidden = state.mode === 'now';
     $('day').value = String(state.day); $('time').value = state.time;
-    $('optsLabel').textContent = `${PREF[state.pref]} · caminas hasta ${state.walk} min · ${state.mode === 'now' ? 'sales ahora' : currentQuery().sum}`;
+    // By bus, by bike or on an electric vehicle: the band shows only what that way of going needs.
+    const wheels = state.travel !== 'bus', veh = vehicle();
+    document.body.dataset.travel = state.travel;
+    document.querySelectorAll('.mode[data-travel]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.travel === state.travel)));
+    if (wheels) {
+      $('vehLbl').textContent = state.travel === 'bici' ? 'Tu bici' : 'Tu vehículo';
+      $('vehChips').innerHTML = VEH_ORDER[state.travel].map(v => `<button type="button" class="chip veh" data-veh="${v}" aria-pressed="${v === veh}">${icon(VEH_ICON[v])}<span>${VEH_SHORT[v]}</span></button>`).join('')
+        + (state.travel === 'electrico' ? '<button type="button" class="chip veh-help" data-open-veh="1">¿Cuál es el mío?</button>' : '');
+      document.querySelectorAll('[data-bike-pref]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.bikePref === state.bikePref)));
+    }
+    $('bikePrefCtl').hidden = !wheels || isMotor(veh);
+    $('optsLabel').textContent = wheels
+      ? `${isMotor(veh) ? 'Solo por la calzada' : state.bikePref === 'safe' ? 'Más ciclorruta' : 'Más directa'} · ${state.mode === 'now' ? 'sales ahora' : currentQuery().sum}`
+      : `${PREF[state.pref]} · caminas hasta ${state.walk} min · ${state.mode === 'now' ? 'sales ahora' : currentQuery().sum}`;
     // With a complete trip, the phone shows one summary line so the answer fits on the first screen.
     const hasTrip = !!(state.from && state.to), collapsed = hasTrip && !state.formOpen;
     $('panel').classList.toggle('is-first', !hasTrip);
@@ -340,7 +365,7 @@ window.SVBoot = function (networkText) {
     if (hasTrip) {
       const q = currentQuery();
       $('sumRoute').textContent = `${state.from.kind === 'gps' ? 'Tu ubicación' : state.from.name} → ${state.to.name}`;
-      $('sumOpts').textContent = `Máximo ${busWord(state.limit)} · ${q.sum}`;
+      $('sumOpts').textContent = wheels ? `${VEH_SHORT[veh]} · ${q.sum}` : `Máximo ${busWord(state.limit)} · ${q.sum}`;
     }
     const currentKey = state.from && state.to ? state.from.name + '>' + state.to.name : '';
     const others = state.recent.filter(r => r.key !== currentKey);
@@ -566,6 +591,7 @@ window.SVBoot = function (networkText) {
   function render() {
     renderForm();
     const seq = ++renderSeq, box = $('results');
+    if (state.travel !== 'bus') { renderBike(seq); return; }
     if (state.routeView) { lastOptions = []; box.innerHTML = routeHtml(state.routeView); return; }
     if (!state.from || !state.to) { lastOptions = []; box.innerHTML = homeHtml(); return; }
     if (dist(state.from.lat, state.from.lon, state.to.lat, state.to.lon) < 60) { lastOptions = []; box.innerHTML = '<div class="verdict"><h2>Ya estás ahí</h2><p>El origen y el destino son el mismo lugar. Cambia uno de los dos.</p></div>'; return; }
@@ -1322,6 +1348,8 @@ window.SVBoot = function (networkText) {
     m.addSource('corridors', { type: 'geojson', data: fc(corridorLines) });
     m.addSource('stops', { type: 'geojson', data: fc(usedStops.map(i => pt(E.lat[i], E.lon[i], { name: pretty(S.n[i]) }))) });
     m.addSource('stations', { type: 'geojson', data: fc(stationsServed.map(i => pt(E.lat[i], E.lon[i], { name: pretty(S.n[i]), portal: /^Portal/.test(S.n[i]) ? 1 : 0 }))) });
+    m.addSource('bikenet', { type: 'geojson', data: fc([]) });
+    RM.netShown = false;
     m.addSource('trip', { type: 'geojson', data: fc([]) });
     m.addSource('tripPts', { type: 'geojson', data: fc([]) });
     m.addSource('picked', { type: 'geojson', data: fc([]) });
@@ -1329,6 +1357,9 @@ window.SVBoot = function (networkText) {
     const L = look(), font = ['Noto Sans Regular'], text = L.text, halo = L.halo;
     m.addLayer({ id: 'corridors', type: 'line', source: 'corridors', paint: { 'line-color': L.line, 'line-opacity': .5, 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 1.5, 15, 4] }, layout: { 'line-cap': 'round' } });
     m.addLayer({ id: 'stops', type: 'circle', source: 'stops', minzoom: 13.5, paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 13.5, 2, 17, 5], 'circle-color': L.dot, 'circle-stroke-color': halo, 'circle-stroke-width': 1 } });
+    m.addLayer({ id: 'bikenet', type: 'line', source: 'bikenet', minzoom: 11, layout: { visibility: 'none', 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': BK_MAP[state.mapDark ? 'dark' : 'light'].net, 'line-opacity': ['interpolate', ['linear'], ['zoom'], 11, .3, 15, .5], 'line-width': ['interpolate', ['linear'], ['zoom'], 11, .8, 16, 3] } });
+    // The bike route gets a light edge so it stands out from the bike network drawn under it.
+    m.addLayer({ id: 'trip-halo', type: 'line', source: 'trip', filter: ['==', ['get', 'halo'], 1], paint: { 'line-color': L.halo, 'line-width': 10 }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
     m.addLayer({ id: 'trip-walk', type: 'line', source: 'trip', filter: ['==', ['get', 'walk'], 1], paint: { 'line-color': text, 'line-width': 3, 'line-dasharray': [0.5, 2] }, layout: { 'line-cap': 'round' } });
     // A route's directions: each drawn to the right of its way of travel, so the way out and the way back sit side by side
     // on the same street, with a dark edge for contrast and arrows that show which way the bus goes.
@@ -1429,6 +1460,7 @@ window.SVBoot = function (networkText) {
     return [[E.lat[l.board], E.lon[l.board]], ...streetLine(entry[0]).slice(from + 1, to + 1), [E.lat[l.alight], E.lon[l.alight]]];
   }
   function tripGeo(o) {
+    if (o.bike) return bikeGeo(o);
     const lines = [], points = [];
     const coordOf = s => [E.lon[s], E.lat[s]];
     const rides = o.legs.filter(l => l.type === 'ride');
@@ -1451,6 +1483,7 @@ window.SVBoot = function (networkText) {
       m.getSource('tripPts').setData(fc(g.points));
       m.getSource('picked').setData(fc(MAP.picked && MAP.mode !== 'pick' ? [pt(MAP.picked.lat, MAP.picked.lon, { name: MAP.picked.name.length > 40 ? MAP.picked.name.slice(0, 38) + '…' : MAP.picked.name })] : []));
       m.getSource('me').setData(fc(MAP.me ? [pt(MAP.me.lat, MAP.me.lon)] : []));
+      showBikeNet();
     } else queueDraw();
   }
   function frameReal() {
@@ -1489,7 +1522,10 @@ window.SVBoot = function (networkText) {
   function frameCanvas() {
     let a = 1e12, b = 1e12, c = -1e12, d = -1e12;
     const add = v => { a = Math.min(a, mx[v]); b = Math.min(b, my[v]); c = Math.max(c, mx[v]); d = Math.max(d, my[v]); };
-    if (MAP.option) {
+    if (MAP.option && MAP.option.bike) {
+      MAP.option.r.groups.forEach(gr => gr.pts.forEach(p => { const x = toX(p[1]), y = toY(p[0]); a = Math.min(a, x); b = Math.min(b, y); c = Math.max(c, x); d = Math.max(d, y); }));
+      fit(a, b, c, d, 60);
+    } else if (MAP.option) {
       MAP.option.legs.forEach(l => { if (l.type === 'ride') E.P[l.pat].stops.slice(l.bPos, l.aPos + 1).forEach(add); });
       fit(a, b, c, d, 70); MAP.cx += 30 / MAP.scale;
     } else if (MAP.mode === 'confirm' && MAP.picked) {
@@ -1537,7 +1573,15 @@ window.SVBoot = function (networkText) {
     g.beginPath();
     for (let i = 0; i < corridors.length; i += 2) { const a = corridors[i], b = corridors[i + 1]; g.moveTo(sx(mx[a]), sy(my[a])); g.lineTo(sx(mx[b]), sy(my[b])); }
     g.stroke(); g.globalAlpha = 1;
-    if (MAP.option) {
+    if (MAP.option && MAP.option.bike) {
+      const motor = isMotor(MAP.option.vehicle);
+      g.lineJoin = 'round';
+      for (const gr of MAP.option.r.groups) {
+        g.strokeStyle = gr.kind === 'walk' ? L.text : bkColor(gr, motor); g.lineWidth = gr.kind === 'walk' ? 2.5 : 6; g.setLineDash(gr.kind === 'walk' ? [2, 6] : []);
+        g.beginPath(); gr.pts.forEach((p, i) => { const x = sx(toX(p[1])), y = sy(toY(p[0])); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.stroke();
+      }
+      g.setLineDash([]);
+    } else if (MAP.option) {
       for (const l of MAP.option.legs) {
         if (l.type === 'ride' && MAP.option.routeView) drawDirection(g, rideLine(l).map(p => [sx(toX(p[1])), sy(toY(p[0]))]), legColor(l), L);
         else if (l.type === 'ride') {
@@ -1558,7 +1602,14 @@ window.SVBoot = function (networkText) {
       cols.forEach(k => occ.add(k));
       g.lineWidth = 3; g.strokeStyle = L.halo; g.strokeText(t, x + 8, y); g.fillStyle = strong ? L.text : L.muted; g.fillText(t, x + 8, y);
     };
-    if (MAP.option) {
+    if (MAP.option && MAP.option.bike) {
+      for (const p of [state.from, state.to]) {
+        if (!p) continue;
+        const x = sx(toX(p.lon)), y = sy(toY(p.lat));
+        g.beginPath(); g.arc(x, y, 6, 0, 7); g.fillStyle = L.surface; g.fill(); g.lineWidth = 3; g.strokeStyle = L.text; g.stroke();
+        label(x, y, p.kind === 'gps' ? 'Tu ubicación' : p.name.slice(0, 40), true);
+      }
+    } else if (MAP.option) {
       const dots = [];
       MAP.option.legs.forEach(l => { if (l.type === 'ride') { dots.push([l.board, l.boardPlace.name]); dots.push([l.alight, l.alightPlace.name]); } });
       dots.forEach(([v, name]) => {
@@ -1645,7 +1696,7 @@ window.SVBoot = function (networkText) {
     MAP.me = state.gps ? { lat: state.gps.lat, lon: state.gps.lon } : null;
     $('mapSheet').hidden = false;
     const confirming = mode === 'confirm';
-    $('mapTitle').textContent = confirming ? '¿Es aquí?' : mode === 'pick' ? (target === 'from' ? 'Toca de dónde sales' : 'Toca a dónde vas') : mode === 'follow' ? 'En viaje' : option && option.routeView ? `Ruta ${option.legs[0].code}` : 'Tu recorrido';
+    $('mapTitle').textContent = confirming ? '¿Es aquí?' : mode === 'pick' ? (target === 'from' ? 'Toca de dónde sales' : 'Toca a dónde vas') : mode === 'follow' ? 'En viaje' : option && option.routeView ? `Ruta ${option.legs[0].code}` : option && option.bike ? `Tu recorrido en ${VEH_WORD[option.vehicle]}` : 'Tu recorrido';
     $('mapTip').hidden = mode !== 'pick' && !confirming;
     $('mapTip').textContent = confirming ? 'Si no es este lugar, toca el punto correcto.' : 'Mueve el mapa hasta dejar el pin sobre tu punto.';
     $('centerPin').hidden = mode !== 'pick';
@@ -1769,6 +1820,7 @@ window.SVBoot = function (networkText) {
     b.setAttribute('aria-pressed', String(state.voice));
   }
   function followStep(lat, lon) {
+    if (FOLLOW.option && FOLLOW.option.bike) { bikeFollowStep(lat, lon); return; }
     const st = FOLLOW.stages[FOLLOW.i];
     if (!st) return;
     if (FOLLOW.seenStage !== FOLLOW.i) { FOLLOW.seenStage = FOLLOW.i; FOLLOW.stageAt = Date.now(); }
@@ -1829,15 +1881,17 @@ window.SVBoot = function (networkText) {
     // Always a fresh position: an old one could skip steps the rider has not done yet.
     const fresh = WEB ? await locate() : null;
     if (WEB && !fresh && state.gps) state.gps = null;
-    Object.assign(FOLLOW, { active: true, option, stages: buildStages(option), i: 0, warned: new Set(), arrived: null, said: null, onBoardSaid: null, seenStage: -1, stageAt: Date.now() });
+    Object.assign(FOLLOW, { active: true, option, stages: option.bike ? [] : buildStages(option), i: 0, warned: new Set(), arrived: null, said: null, onBoardSaid: null, seenStage: -1, stageAt: Date.now() });
     // Waiting at a stop sends no GPS changes, so the screen also checks the time on its own.
     clearInterval(FOLLOW.tick);
+    if (option.bike) bikeFollowInit(option);
     FOLLOW.tick = setInterval(() => { if (FOLLOW.active) followStep(state.gps && WEB ? state.gps.lat : null, state.gps && WEB ? state.gps.lon : null); }, 30000);
     openMap('follow', option);
     // The preview page has no GPS: the rider advances by hand, which still shows how the trip looks.
-    $('fHint').textContent = WEB ? 'Deja la pantalla encendida para recibir el aviso de bajarte.' : 'Vista previa sin GPS: avanza con «Siguiente paso». La versión web te avisa sola cuándo bajarte.';
+    $('fHint').textContent = option.bike ? (WEB ? 'Deja la pantalla encendida: te avisamos antes de cada giro. No mires el teléfono mientras conduces.' : 'Vista previa sin GPS: avanza con «Siguiente paso».')
+      : WEB ? 'Deja la pantalla encendida para recibir el aviso de bajarte.' : 'Vista previa sin GPS: avanza con «Siguiente paso». La versión web te avisa sola cuándo bajarte.';
     if (!WEB) { followStep(null, null); return; }
-    if (gpsProblem()) { showFollow('Sin ubicación', 'No podemos avisarte cuándo bajarte. Mira las paradas y avanza con «Siguiente paso».', 'alert'); $('fNext').hidden = false; return; }
+    if (gpsProblem()) { showFollow('Sin ubicación', option.bike ? 'No podemos avisarte de los giros. Avanza con «Siguiente paso».' : 'No podemos avisarte cuándo bajarte. Mira las paradas y avanza con «Siguiente paso».', 'alert'); $('fNext').hidden = false; return; }
     followStep(state.gps ? state.gps.lat : null, state.gps ? state.gps.lon : null);
     FOLLOW.watch = navigator.geolocation.watchPosition(pos => {
       const { latitude: lat, longitude: lon, accuracy } = pos.coords;
@@ -1862,10 +1916,455 @@ window.SVBoot = function (networkText) {
     $('mapSheet').hidden = true;
   }
 
+  // ---------- by bike, e-scooter, moped or electric motorcycle ----------
+  // Same trip box, another engine: js/bike.js over data/bike.json, loaded the first time someone picks these modes.
+  // Each vehicle only goes where the rules let it (data/bike-rules.json, in the page as SV_BIKE_RULES). The point is
+  // not only the fastest way: it is the way that vehicle may legally take, with bike paths first, said in plain words.
+  const BRULES = window.SV_BIKE_RULES || { vehicles: {}, bogota: {} }, BINFO = window.SV_BIKE || {};
+  const VEH_ORDER = { bici: ['bici', 'ebici'], electrico: ['patineta', 'ciclomotor', 'moto'] };
+  const VEH_WORD = { bici: 'bici', ebici: 'bici eléctrica', patineta: 'patineta', ciclomotor: 'ciclomotor', moto: 'moto' };
+  const VEH_THE = { bici: 'la bici', ebici: 'la bici', patineta: 'la patineta', ciclomotor: 'el ciclomotor', moto: 'la moto' };
+  const VEH_SHORT = { bici: 'Bicicleta', ebici: 'Bici eléctrica', patineta: 'Patineta', ciclomotor: 'Bici-moto o ciclomotor', moto: 'Moto eléctrica' };
+  const VEH_ICON = { bici: 'bike', ebici: 'ebike', patineta: 'scooter', ciclomotor: 'moped', moto: 'moto' };
+  const vehicle = () => (state.travel === 'bici' ? state.bikeVeh : state.elecVeh);
+  const vgroup = v => (BRULES.vehicles[v] || {}).group || 'bike';
+  const isMotor = v => vgroup(v) === 'moped' || vgroup(v) === 'moto';
+  const kmLabel = m => (m < 950 ? distLabel(m) : (m / 1000).toFixed(1).replace('.', ',') + ' km');
+  const BIKE = { ready: false, loading: null, failed: false, worker: null, engine: null, text: null, seq: 0, pending: new Map(), info: null, net: null, netLoading: null, allowed: false };
+  // Without the shape of each stretch's pieces, what travels between the worker and the page stays small.
+  const slimPlan = r => { const s = x => (x && !x.error ? { ...x, groups: x.groups.map(({ legs, ...g }) => g) } : x); return r && { main: s(r.main), other: s(r.other) }; };
+  function bikeWorkerMain() {
+    let engine = null;
+    const slim = r => { const s = x => (x && !x.error ? { ...x, groups: x.groups.map(({ legs, ...g }) => g) } : x); return r && { main: s(r.main), other: s(r.other) }; };
+    self.onmessage = e => {
+      const m = e.data;
+      if (m.init) {
+        try { engine = BikeEngine.create(JSON.parse(m.init)); self.postMessage({ ready: true, info: { meta: engine.meta, tramos: engine.tramos, parking: engine.parking } }); } catch (err) { self.postMessage({ ready: false }); }
+        return;
+      }
+      try { self.postMessage({ id: m.id, result: m.net ? engine.network() : slim(engine.plan(m.q)) }); } catch (err) { self.postMessage({ id: m.id, failed: String(err) }); }
+    };
+  }
+  function bikeOnPage(m) {
+    if (!BIKE.engine) BIKE.engine = BikeEngine.create(JSON.parse(BIKE.text));
+    return m.net ? BIKE.engine.network() : slimPlan(BIKE.engine.plan(m.q));
+  }
+  function loadBike() {
+    if (BIKE.ready) return Promise.resolve(true);
+    if (BIKE.loading) return BIKE.loading;
+    BIKE.failed = false;
+    BIKE.loading = (async () => {
+      const inline = $('bikeData');
+      BIKE.text = inline ? inline.textContent : await fetch(`bike.json?b=${BINFO.built || ''}`).then(r => { if (!r.ok) throw new Error('bike.json ' + r.status); return r.text(); });
+      await new Promise((resolve, reject) => {
+        let settled = false;
+        const onPage = () => {
+          if (settled) return; settled = true;
+          try { BIKE.engine = BikeEngine.create(JSON.parse(BIKE.text)); BIKE.info = { meta: BIKE.engine.meta, tramos: BIKE.engine.tramos, parking: BIKE.engine.parking }; resolve(); } catch (err) { reject(err); }
+        };
+        try {
+          const w = new Worker(URL.createObjectURL(new Blob([$('bikeSrc').textContent + `\n;(${bikeWorkerMain.toString()})();`], { type: 'text/javascript' })));
+          const limit = setTimeout(() => { w.terminate(); onPage(); }, 15000);
+          w.onerror = () => { clearTimeout(limit); w.terminate(); onPage(); };
+          w.onmessage = e => {
+            if (e.data.ready === undefined || settled) return;
+            clearTimeout(limit);
+            if (!e.data.ready) { w.terminate(); onPage(); return; }
+            settled = true; BIKE.worker = w; BIKE.info = e.data.info;
+            w.onmessage = ev => {
+              const p = BIKE.pending.get(ev.data.id);
+              if (!p) return;
+              BIKE.pending.delete(ev.data.id); clearTimeout(p.limit);
+              p.resolve(ev.data.failed ? bikeOnPage(p.m) : ev.data.result);
+            };
+            // A worker that breaks later hands its pending questions to the page.
+            w.onerror = () => { BIKE.worker = null; for (const [id, p] of BIKE.pending) { BIKE.pending.delete(id); clearTimeout(p.limit); p.resolve(bikeOnPage(p.m)); } };
+            resolve();
+          };
+          w.postMessage({ init: BIKE.text });
+        } catch (e) { onPage(); }
+      });
+      BIKE.ready = true;
+      return true;
+    })().catch(err => { BIKE.failed = true; BIKE.loading = null; throw err; });
+    return BIKE.loading;
+  }
+  function bikeAsk(m) {
+    if (!BIKE.worker) return new Promise(resolve => setTimeout(() => resolve(bikeOnPage(m)), 0));
+    return new Promise(resolve => {
+      const id = ++BIKE.seq;
+      const limit = setTimeout(() => { if (BIKE.pending.delete(id)) resolve(bikeOnPage(m)); }, 8000);
+      BIKE.pending.set(id, { resolve, m, limit });
+      BIKE.worker.postMessage({ id, ...m });
+    });
+  }
+  function bikeNet() {
+    if (BIKE.net) return Promise.resolve(BIKE.net);
+    if (!BIKE.netLoading) BIKE.netLoading = loadBike().then(() => bikeAsk({ net: 1 })).then(r => { BIKE.net = r; return r; });
+    return BIKE.netLoading;
+  }
+  function bikeQuery() {
+    const q = currentQuery(), minute = Math.floor((q.arriveBy !== undefined ? q.arriveBy : q.time) / 60);
+    return { from: { lat: state.from.lat, lon: state.from.lon }, to: { lat: state.to.lat, lon: state.to.lon }, vehicle: vehicle(), pref: isMotor(vehicle()) ? 'safe' : state.bikePref, day: q.day, minute, ciclovia: BikeEngine.cicloviaOn(q.day, minute), arriveBy: q.arriveBy, time: q.time, label: q.label };
+  }
+  // Is the Sunday ciclovía on now (for the home screen)?
+  const cicloviaNow = () => { const n = bogotaNow(); return BikeEngine.cicloviaOn(E.dayType(n.date), Math.floor(n.sec / 60)); };
+
+  // --- words for a stretch ---
+  const theStreet = n => (/^(anillo|paseo|camino|corredor|parque|puente|sendero|bulevar|boulevard|eje)\b/i.test(n) ? 'el ' : 'la ') + n;
+  const isAvenue = g => g.kind === 'calle' && g.cls <= 3;
+  function whereText(g) {
+    const n = g.name;
+    switch (g.kind) {
+      case 'ciclorruta': return n ? `la ciclorruta de ${theStreet(n)}` : 'la ciclorruta';
+      case 'ciclovia': return n ? `la ciclovía de ${theStreet(n)}` : 'la ciclovía';
+      case 'bicicarril': return n ? `el bicicarril de ${theStreet(n)}` : 'el bicicarril';
+      case 'busbici': return n ? `el carril bus-bici de ${theStreet(n)}` : 'el carril bus-bici';
+      case 'compartida': return n ? `${theStreet(n)}, vía con prioridad para bicis` : 'la vía con prioridad para bicis';
+      case 'peatonal': return n ? `el paso compartido con peatones de ${theStreet(n)}` : 'el paso compartido con peatones';
+      default: return n ? theStreet(n) : 'una calle sin nombre';
+    }
+  }
+  const TURN_VERB = { start: 'Sal por', sigue: 'Sigue por', derecha: 'Gira a la derecha por', izquierda: 'Gira a la izquierda por', 'leve-derecha': 'Toma a la derecha por', 'leve-izquierda': 'Toma a la izquierda por', vuelta: 'Da la vuelta y sigue por' };
+  // "at" is 'first' or 'last' for the stretches that start or end the trip.
+  function stepText(g, v, at) {
+    if (g.kind === 'walk') {
+      const why = g.bridge ? 'por el puente peatonal' : vgroup(v) === 'velmpu' ? 'por el andén: ahí no se puede rodar' : 'por el andén o el sendero peatonal';
+      if (at === 'first') return `Empieza caminando con ${VEH_THE[v]} ${why}`;
+      if (at === 'last') return `Termina caminando con ${VEH_THE[v]} ${why}`;
+      return `Bájate y camina con ${VEH_THE[v]} ${why}`;
+    }
+    return `${TURN_VERB[g.turn] || 'Sigue por'} ${whereText(g)}`;
+  }
+  function speedFor(g, v) {
+    const r = BRULES.vehicles[v] || {}, road = g.max || 50;
+    if (g.kind === 'walk') return '';
+    if (vgroup(v) === 'velmpu') return g.kind === 'calle' ? `máx. ${Math.min(r.maxRoad || 40, road)} km/h` : `máx. ${r.maxCiclo || 25} km/h`;
+    if (vgroup(v) === 'moped') return `máx. ${Math.min(r.maxRoad || 45, road)} km/h`;
+    if (vgroup(v) === 'moto') return `máx. ${road} km/h`;
+    return g.kind === 'ciclovia' ? 'ciclovía: ve despacio' : '';
+  }
+  const KIND_LABEL = { ciclorruta: 'ciclorruta', ciclovia: 'ciclovía', bicicarril: 'bicicarril', busbici: 'carril bus-bici', compartida: 'vía compartida', peatonal: 'paso con peatones', calle: 'calle', avenida: 'avenida sin ciclorruta', road: 'calzada', walk: 'a pie' };
+  const kindClass = (g, motor) => (motor ? 'road' : g.kind === 'calle' ? (isAvenue(g) ? 'avenida' : 'calle') : g.kind);
+
+  // The trip at a glance, by distance: green where there is bike infrastructure, grey on quiet streets, striped on
+  // avenues with nothing for bikes, dotted where the rider pushes the bike.
+  function bikeStrip(x, motor) {
+    // Bike paths, bike lanes and the ciclovía read as one green run, in the color of whichever is longest.
+    const GREEN = new Set(['ciclorruta', 'ciclovia', 'bicicarril']), fam = k => (GREEN.has(k) ? 'green' : k);
+    const total = x.dist || 1;
+    let parts = [];
+    for (const g of x.groups) {
+      const k = kindClass(g, motor), last = parts[parts.length - 1];
+      if (last && fam(last.k) === fam(k)) { last.len += g.len; last.by[k] = (last.by[k] || 0) + g.len; }
+      else parts.push({ k, len: g.len, by: { [k]: g.len } });
+    }
+    // Slivers melt into their neighbor, except an avenue or a walk long enough to matter.
+    const keep = p => p.len >= total * 0.03 || (p.k === 'avenida' && p.len >= 100) || (p.k === 'walk' && p.len >= 50);
+    for (let i = 0; i < parts.length; i++) {
+      if (keep(parts[i]) || parts.length === 1) continue;
+      const into = parts[i - 1] || parts[i + 1];
+      into.len += parts[i].len; for (const [k, l] of Object.entries(parts[i].by)) into.by[k] = (into.by[k] || 0) + l;
+      parts.splice(i, 1); i--;
+      // Two runs of the same family that now touch become one.
+      const a = parts[i], b = parts[i + 1];
+      if (a && b && fam(a.k) === fam(b.k)) { a.len += b.len; for (const [k, l] of Object.entries(b.by)) a.by[k] = (a.by[k] || 0) + l; parts.splice(i + 1, 1); }
+    }
+    parts = parts.map(p => ({ ...p, k: Object.entries(p.by).sort((a, b) => b[1] - a[1])[0][0] }));
+    const segs = parts.map(p => `<span class="seg bk-${p.k}" style="flex:${Math.max(1, Math.round(p.len))} 1 auto">${p.k === 'walk' ? icon('walk') : ''}${p.len / total >= 0.16 && p.k !== 'walk' ? `<span class="n">${kmLabel(p.len)}</span>` : ''}</span>`);
+    const said = parts.map(p => `${kmLabel(p.len)} ${p.k === 'avenida' ? 'por avenida sin ciclorruta' : p.k === 'road' ? 'por la calzada' : p.k === 'walk' ? 'a pie con el vehículo' : 'por ' + (KIND_LABEL[p.k] || 'calle')}`).join(', ');
+    return `<div class="strip bk-strip" role="img" aria-label="${esc(said)}">${segs.join('')}</div>`;
+  }
+  function bikeStepsHtml(x, v) {
+    const motor = isMotor(v);
+    const rows = x.groups.map((g, i) => {
+      const k = kindClass(g, motor), speed = speedFor(g, v), at = i === 0 ? 'first' : i === x.groups.length - 1 ? 'last' : '';
+      const meta = [kmLabel(g.len), g.kind === 'walk' ? `${mins(g.sec)} min` : `hacia ${g.toward}`, speed].filter(Boolean).join(' · ');
+      const warn = !motor && isAvenue(g) && g.len >= 120 ? '<p class="warn">Vía principal sin ciclorruta: ve por el carril derecho y atento a los buses</p>'
+        : vgroup(v) === 'moped' && g.cls <= 1 && g.len >= 200 ? '<p class="warn">Vía rápida: ve por el carril derecho</p>' : '';
+      return `<li class="step bk-step${g.kind === 'walk' ? ' walk' : ''}" style="--rail:var(--bk-${k})"><div class="rail"></div><div class="step-body"><p class="step-title">${esc(stepText(g, v, at))}</p><p class="step-meta">${esc(meta)}</p>${warn}</div></li>`;
+    });
+    rows.push(`<li class="step bk-step" style="--rail:var(--bk-calle)"><div class="rail"></div><div class="step-body"><p class="step-title">Llegas a ${esc(state.to.name)}</p></div></li>`);
+    return rows.join('');
+  }
+  function bikeReasons(x, other, q) {
+    const v = q.vehicle, out = [];
+    if (isMotor(v)) {
+      out.push('Solo por la calzada, como manda la norma');
+      if (q.ciclovia) out.push('Evita las vías cerradas por la ciclovía');
+      if (x.groups.every(g => g.cls > 1) && vgroup(v) === 'moped') out.push('Sin vías rápidas');
+      return out;
+    }
+    if (!x.exposed.length) out.push('Sin avenidas sin ciclorruta');
+    if (other && other.sec < x.sec && x.sec - other.sec < 600) out.push(`Solo ${mins(x.sec - other.sec)} min más que la más directa`);
+    if (x.walkM < 30) out.push(`Sin bajarte de ${VEH_THE[v]}`);
+    if (x.cicloviaM >= 300) out.push(`${kmLabel(x.cicloviaM)} por la ciclovía`);
+    return out.slice(0, 4);
+  }
+  function bikeWarnings(x, v) {
+    const out = [], motor = isMotor(v);
+    if (!motor && x.exposed.length) {
+      const names = [...new Set(x.exposed.map(e => e.name).filter(Boolean))].slice(0, 2), len = x.exposed.reduce((a, e) => a + e.len, 0);
+      out.push(`<p class="warn">${kmLabel(len)} sin ciclorruta por ${names.length ? names.map(theStreet).join(' y ') : 'vías principales'}. Ve por el carril derecho.</p>`);
+    }
+    if (x.walkM >= 30) out.push(`<p class="fare-note">Empujas ${VEH_THE[v]} ${kmLabel(x.walkM)} en total${vgroup(v) === 'velmpu' ? ': por andenes y zonas peatonales no se puede rodar' : ''}.</p>`);
+    if (vgroup(v) === 'moped') out.push('<p class="fare-note">Para la norma tu vehículo es un ciclomotor: no puede ir por ciclorrutas ni andenes. Esta ruta va solo por la calzada.</p>');
+    if (x.from.off > 150) out.push(`<p class="fare-note">Tu punto de partida está a ${distLabel(x.from.off)} de la calle más cercana por la que puedes ir.</p>`);
+    if (x.to.off > 150) out.push(`<p class="fare-note">Tu destino está a ${distLabel(x.to.off)} de la calle más cercana por la que puedes ir.</p>`);
+    return out.join('');
+  }
+  function arrivalOf(x, q) { return q.arriveBy !== undefined ? q.arriveBy : q.time + x.sec; }
+  function bikeCardHtml(x, q, open, tag, reasons) {
+    const v = q.vehicle, motor = isMotor(v);
+    const id = lastOptions.push({ bike: true, r: x, vehicle: v }) - 1;
+    const actions = `<div class="card-actions"><button type="button" class="btn primary" data-follow="${id}">${icon('go')}Iniciar viaje</button><button type="button" class="btn" data-map-option="${id}">${icon('map')}Ver en el mapa</button></div>`;
+    const head = `<div class="head"><span class="big">${mins(x.sec)} <small>min</small></span><span class="arrive">${q.arriveBy !== undefined ? `Sal ~${clock(q.arriveBy - x.sec)}` : `Llegas ~${clock(arrivalOf(x, q))}`}</span></div>
+      ${bikeStrip(x, motor)}
+      <p class="meta">${kmLabel(x.dist)}${motor ? ' por la calzada' : ` · <b>${x.pct} %</b> por ciclorruta o bicicarril`}${x.walkM >= 30 ? ` · a pie ${kmLabel(x.walkM)}` : ''}</p>`;
+    const steps = `<ol class="steps">${bikeStepsHtml(x, v)}</ol>`;
+    if (!open) return `<details class="card"><summary>${tag ? `<span class="mini-tag">${icon(tag.icon || 'clock')}${esc(tag.text || tag)}</span>` : ''}${head}<span class="more">Ver el paso a paso</span></summary>${bikeWarnings(x, v)}${steps}${actions}</details>`;
+    return `<article class="card${tag ? ' has-tag' : ''}">
+      <div class="card-main">
+        ${tag ? `<span class="tagline">${esc(tag)}</span>` : ''}
+        ${head}
+        ${bikeWarnings(x, v)}
+        ${reasons && reasons.length ? `<ul class="reasons">${reasons.map(t => `<li>${icon('check')}${esc(t)}</li>`).join('')}</ul>` : ''}
+      </div>
+      ${actions}
+      <details class="steps-box"><summary>Ver el paso a paso${icon('down')}</summary>${steps}<div class="trip-links"><button type="button" class="linkish" data-share="${id}">Compartir este viaje</button><button type="button" class="linkish" data-report="${id}">Reportar un error en esta ruta</button></div></details>
+    </article>`;
+  }
+  // Where this vehicle may go, from the rules file, so the rider learns the rule and not only the route.
+  function vehRulesHtml(v, compact) {
+    const r = BRULES.vehicles[v] || {}, motor = isMotor(v);
+    const row = (ok, what, how) => `<li class="${ok ? 'yes' : 'no'}">${icon(ok ? 'check' : 'cross')}<span><b>${what}</b>${how ? ` · ${esc(how)}` : ''}</span></li>`;
+    const list = `<ul class="veh-rules">
+      ${row(r.cicloinfra, 'Ciclorruta y bicicarril', r.cicloinfra ? (r.maxCiclo ? `máximo ${r.maxCiclo} km/h` : 'por la derecha, a ritmo de bici') : 'nunca')}
+      ${row(r.calzada, 'Calzada', r.maxRoad ? `carril derecho, máximo ${r.maxRoad} km/h` : vgroup(v) === 'moto' ? 'como cualquier moto, con el límite de cada vía' : 'por la derecha')}
+      ${row(false, 'Andenes y zonas peatonales', motor ? 'nunca' : 'nunca rodando: te bajas y caminas')}
+      ${row(false, 'Carriles de TransMilenio', 'nunca')}
+    </ul>`;
+    if (compact) return list;
+    return `<section class="veh-card">
+      <h3 class="group-title">${icon(VEH_ICON[v])}${esc(r.name || VEH_SHORT[v])}</h3>
+      ${r.detail ? `<p class="fine-line">${esc(r.detail)}</p>` : ''}
+      ${list}
+      ${r.needs ? `<p class="fine-line">${esc(r.needs)}</p>` : ''}
+      <button type="button" class="linkish" data-open-veh="1">¿No sabes cuál es tu vehículo? Así lo reconoces</button>
+    </section>`;
+  }
+  function bikeHomeHtml() {
+    const v = vehicle(), st = BINFO.stats || {}, elec = state.travel === 'electrico';
+    const cv = cicloviaNow() ? `<div class="notice good-note">Hoy hay ciclovía hasta las 2:00 p. m. ${isMotor(v) ? 'Varias vías están cerradas a carros y motos: la ruta las evita.' : 'La ruta la aprovecha cuando te sirve.'}</div>` : '';
+    return `${cv}<section class="enable bike-intro">
+      <h2>${elec ? 'Rutas según tu vehículo eléctrico' : 'Rutas en bici por Bogotá'}</h2>
+      <p>${isMotor(v) ? 'Te llevamos solo por la calzada: tu vehículo no puede usar ciclorrutas ni andenes.' : 'Te llevamos por ciclorruta cuando la hay y te decimos dónde no. La ruta solo usa las vías que tu vehículo puede usar según la norma.'}</p>
+      ${st.kmInfra ? `<p class="bike-stats"><span><b>${st.kmInfra}</b> km de ciclorrutas y bicicarriles</span><span><b>${st.kmCiclovia}</b> km de ciclovía los domingos</span></p>` : ''}
+      ${WEB && !state.gps ? `<p class="fine-line">Elige de dónde sales y a dónde vas arriba.</p>` : ''}
+    </section>${vehRulesHtml(v)}${bikeFineHtml()}`;
+  }
+  function bikeFineHtml() {
+    const built = BINFO.built ? dayLabel(BINFO.built) : '';
+    return `<footer class="fine"><p><b>La señal en la vía manda sobre la ruta.</b> ${esc(BRULES.bogota.puntos || '')}</p>
+      <p>Reglas por vehículo: Ley 2486 de 2025 y Resolución 20263040030675 de 2026 del Ministerio de Transporte, revisadas el ${esc(dayLabel(BRULES.checked || '2026-11-08'))}. Tiempos estimados sin tráfico ni subidas: tómalos como guía.</p>
+      <p>Mapa de ciclorrutas${built ? ` del ${built}` : ''}: red de biciusuarios del IDU (IDECA, CC BY 4.0), ciclovía del IDRD y calles de © colaboradores de <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>. <b>Sin Vueltas no es una app oficial.</b> En una emergencia llama al 123.</p>
+      <p class="foot-links"><button type="button" class="linkish" data-open-veh="1">Qué puede hacer cada vehículo</button><button type="button" class="linkish" data-legal="1">Privacidad, términos y borrar mis datos</button></p></footer>`;
+  }
+  function renderBike(seq) {
+    const box = $('results');
+    if (!state.from || !state.to) { lastOptions = []; box.innerHTML = bikeHomeHtml(); if (!isLite() || $('bikeData')) loadBike().catch(() => {}); return; }
+    if (dist(state.from.lat, state.from.lon, state.to.lat, state.to.lon) < 60) { lastOptions = []; box.innerHTML = '<div class="verdict"><h2>Ya estás ahí</h2><p>El origen y el destino son el mismo lugar. Cambia uno de los dos.</p></div>'; return; }
+    if (!BIKE.ready) {
+      lastOptions = [];
+      // Light mode asks before downloading the bike map.
+      if (isLite() && !BIKE.allowed && !$('bikeData')) {
+        box.innerHTML = `<div class="verdict"><h2>Falta el mapa de ciclorrutas</h2><p>Para calcular la ruta en ${VEH_WORD[vehicle()]} hay que bajar el mapa de Bogotá una vez (cerca de 1 MB). Después funciona sin internet.</p></div><button type="button" class="btn primary wide" data-bike-load="1">Bajar el mapa de ciclorrutas</button>${bikeFineHtml()}`;
+        return;
+      }
+      box.innerHTML = '<p class="calc">Cargando el mapa de ciclorrutas de Bogotá…</p><div class="calc-card" aria-hidden="true"><i></i><i></i><i></i></div>';
+      loadBike().then(() => { if (seq === renderSeq) render(); }).catch(() => {
+        if (seq === renderSeq) box.innerHTML = '<div class="notice">No pudimos cargar el mapa de ciclorrutas. Revisa tu conexión a internet e intenta de nuevo.</div><button type="button" class="btn wide" data-bike-load="1">Intentar de nuevo</button>';
+      });
+      return;
+    }
+    const q = bikeQuery();
+    const notice = setTimeout(() => { if (seq === renderSeq) box.innerHTML = '<p class="calc">Calculando tu ruta…</p><div class="calc-card" aria-hidden="true"><i></i><i></i><i></i></div>'; }, 250);
+    bikeAsk({ q }).then(r => { clearTimeout(notice); if (seq === renderSeq) showBikeResults(r, q, seq); });
+  }
+  function showBikeResults(res, q, seq) {
+    lastOptions = [];
+    const box = $('results'), v = q.vehicle, motor = isMotor(v), x = res.main;
+    if (!x || x.error) {
+      const which = x && x.error === 'from' ? 'tu punto de partida' : 'tu destino';
+      box.innerHTML = `<div class="verdict"><h2>No encontramos una ruta</h2><p>${x && x.error !== 'none' ? `${which[0].toUpperCase() + which.slice(1)} está lejos de las calles por las que puede ir tu ${VEH_WORD[v]}.` : `No hay un camino permitido para tu ${VEH_WORD[v]} entre estos dos puntos.`} Prueba un punto cercano.</p></div>${bikeFineHtml()}`;
+      return;
+    }
+    const other = res.other;
+    let html = '';
+    if (q.ciclovia) html += `<div class="notice good-note">Hoy hay ciclovía hasta las 2:00 p. m. ${motor ? 'La ruta evita las vías cerradas a carros y motos.' : x.cicloviaM >= 300 ? `Vas ${kmLabel(x.cicloviaM)} por ella${vgroup(v) === 'velmpu' ? ', a máximo 25 km/h' : ''}.` : 'Esta vez no te queda de camino.'}</div>`;
+    const night = q.minute < 360 || q.minute >= 1080;
+    const headline = q.arriveBy !== undefined ? `Sal a las ${clock(q.arriveBy - x.sec)} en ${VEH_WORD[v]}` : `${mins(x.sec)} min en ${VEH_WORD[v]}`;
+    const sub = motor ? `${kmLabel(x.dist)} por la calzada.` : x.pct >= 60 ? `${kmLabel(x.dist)}, casi todo por ciclorruta o bicicarril.` : x.pct >= 25 ? `${kmLabel(x.dist)}, ${x.pct} % por ciclorruta o bicicarril.` : `${kmLabel(x.dist)}. Por aquí casi no hay ciclorrutas: la ruta busca calles tranquilas.`;
+    html += `<div class="verdict"><h2>${esc(headline)}</h2><p>${esc(sub)}</p><p class="salida">Salida: ${esc(q.label)}</p><p class="bus-compare" id="busCompare" hidden></p></div>`;
+    html += bikeCardHtml(x, q, true, 'Te la recomendamos', bikeReasons(x, other, q));
+    if (other) {
+      const dt = x.sec - other.sec;
+      const tag = other.pref === 'direct' ? { text: `Más directa · ${dt >= 60 ? `${mins(dt)} min menos` : 'casi igual'} · ${other.pct} % ciclorruta`, icon: 'clock' } : { text: `Más ciclorruta · ${other.pct} % · ${mins(-dt)} min más`, icon: 'check' };
+      html += `<section class="group"><h3 class="group-title">Otra opción</h3>${bikeCardHtml(other, q, false, tag)}</section>`;
+    }
+    if (night && !motor) html += `<div class="notice">De noche: luz blanca adelante, luz roja atrás y prenda reflectiva${vgroup(v) === 'velmpu' ? ' (obligatorio de 6:00 p. m. a 6:00 a. m.)' : ''}.</div>`;
+    html += vehRulesHtml(v);
+    box.innerHTML = html + bikeFineHtml();
+    // The same trip by bus, for comparison: the rider may not know which is faster.
+    Planner.recommend({ from: state.from, to: state.to, day: q.day, time: q.time, arriveBy: q.arriveBy, limit: state.limit, maxWalk: state.walk * 60, pref: state.pref, card: state.card }).then(r => {
+      const el = $('busCompare'), best = r && r.ranked && r.ranked[0];
+      if (!el || seq !== renderSeq || !best) return;
+      const diff = best.total - x.sec;
+      el.innerHTML = `En TransMilenio o SITP serían ~${mins(best.total)} min con ${busWord(best.buses)}${Math.abs(diff) >= 300 ? ` (${diff > 0 ? `${mins(diff)} min más` : `${mins(-diff)} min menos`})` : ''}. <button type="button" class="linkish" data-travel="bus">Ver en bus</button>`;
+      el.hidden = false;
+    }).catch(() => {});
+  }
+
+  // --- the vehicle guide: what the rules say each one is, and where it may go ---
+  function openVehSheet() {
+    const order = ['bici', 'ebici', 'patineta', 'ciclomotor', 'moto'];
+    const how = { bici: 'Sin motor.', ebici: 'Motor que solo ayuda mientras pedaleas, sin acelerador, y se corta a 25 km/h.', patineta: 'Vas de pie, sin sillín. Hasta 40 km/h y 1.000 W.', ciclomotor: 'Tiene acelerador, o asiento, o pasa de 1.000 W. Hasta 45 km/h. Aunque tenga pedales.', moto: 'Pasa de 45 km/h o de 4.000 W.' };
+    $('vehList').innerHTML = `<p class="hint">Para la norma no importa cómo se llame tu vehículo en la tienda, sino cómo funciona. Busca el tuyo:</p>
+      ${order.map(v => { const r = BRULES.vehicles[v] || {}; const mine = v === vehicle() && state.travel !== 'bus'; return `<article class="veh-guide${mine ? ' is-mine' : ''}">
+        <h4>${icon(VEH_ICON[v])}${esc(r.name || VEH_SHORT[v])}</h4>
+        <p class="veh-how">${esc(how[v])}</p>
+        ${vehRulesHtml(v, true)}
+        <p class="fine-line">${esc(r.needs || '')}</p>
+        <button type="button" class="btn${mine ? '' : ' primary'} wide" data-pick-veh="${v}">${mine ? 'Es el que tienes elegido' : 'Es el mío'}</button>
+      </article>`; }).join('')}
+      <h4>En Bogotá</h4>
+      <ul>
+        <li>${esc(BRULES.bogota.puntos || '')}</li>
+        <li>${esc(BRULES.bogota.ciclovia || '')}</li>
+        <li>${esc(BRULES.bogota.multa || '')}</li>
+      </ul>
+      <p class="fine-line">Fuentes: Ley 2486 de 2025 (art. 96-1 del Código de Tránsito y art. 15) y Resolución 20263040030675 del 4 de agosto de 2026 del Ministerio de Transporte, Anexo 80. Revisado el ${esc(dayLabel(BRULES.checked || '2026-11-08'))}. Esto no es asesoría legal.</p>`;
+    $('vehSheet').hidden = false;
+  }
+  function setVehicle(v) {
+    if (VEH_ORDER.bici.includes(v)) { state.travel = 'bici'; state.bikeVeh = v; } else { state.travel = 'electrico'; state.elecVeh = v; }
+    persist();
+  }
+  function setTravel(t) {
+    if (t === state.travel) return;
+    state.travel = t; state.routeView = null; persist();
+    $('mapSheet').hidden = true;
+    render(); window.scrollTo(0, 0);
+    replay(document.querySelector('.modes'), 'switched');
+  }
+
+  // --- the bike route on the maps ---
+  const BK_MAP = {
+    light: { ciclorruta: '#1f5a40', ciclovia: '#1f5a40', bicicarril: '#2e7a55', busbici: '#4f8f6f', compartida: '#4f8f6f', peatonal: '#4f8f6f', calle: '#4b555c', avenida: '#c27a00', road: '#1b1f22', net: '#3fa673' },
+    dark: { ciclorruta: '#6fd0a4', ciclovia: '#6fd0a4', bicicarril: '#5cbf92', busbici: '#8fd2b2', compartida: '#8fd2b2', peatonal: '#8fd2b2', calle: '#c9d0d4', avenida: '#f0a830', road: '#eef1f2', net: '#3a8a63' },
+  };
+  const bkColor = (g, motor) => BK_MAP[state.mapDark ? 'dark' : 'light'][kindClass(g, motor)] || BK_MAP.light.calle;
+  function bikeGeo(o) {
+    const motor = isMotor(o.vehicle), lines = [], points = [];
+    for (const g of o.r.groups) lines.push(line(g.pts.map(p => [p[1], p[0]]), g.kind === 'walk' ? { walk: 1 } : { color: bkColor(g, motor), halo: 1 }));
+    const a = o.r.groups[0].pts[0], gl = o.r.groups[o.r.groups.length - 1], b = gl.pts[gl.pts.length - 1];
+    if (state.from) { lines.unshift(line([[state.from.lon, state.from.lat], [a[1], a[0]]], { walk: 1 })); points.push(pt(state.from.lat, state.from.lon, { name: state.from.kind === 'gps' ? 'Tu ubicación' : state.from.name })); }
+    if (state.to) { lines.push(line([[b[1], b[0]], [state.to.lon, state.to.lat]], { walk: 1 })); points.push(pt(state.to.lat, state.to.lon, { name: state.to.name })); }
+    return { lines, points };
+  }
+  // The bike network around the route, faint, so the rider sees other paths nearby.
+  function showBikeNet() {
+    if (!RM.ready || !RM.map || !RM.map.getSource('bikenet')) return;
+    const want = state.travel !== 'bus' && !isMotor(vehicle());
+    RM.map.setLayoutProperty('bikenet', 'visibility', want ? 'visible' : 'none');
+    for (const id of ['corridors', 'stops', 'stops-label']) if (RM.map.getLayer(id)) RM.map.setLayoutProperty(id, 'visibility', state.travel === 'bus' ? 'visible' : 'none');
+    if (!want || RM.netShown) return;
+    bikeNet().then(net => {
+      if (!RM.ready || RM.netShown) return;
+      RM.netShown = true;
+      RM.map.getSource('bikenet').setData(fc(net.map(n => line(n.pts, { k: n.k }))));
+    }).catch(() => {});
+  }
+
+  // --- trip mode on wheels: the next turn, how far, and a voice before it ---
+  function bikeFollowInit(o) {
+    const pts = [], starts = [];
+    let cum = 0;
+    o.r.groups.forEach(g => {
+      starts.push(cum);
+      g.pts.forEach((p, k) => {
+        if (pts.length && k === 0) return;
+        if (pts.length) { const q = pts[pts.length - 1]; cum += dist(q.lat, q.lon, p[0], p[1]); }
+        pts.push({ lat: p[0], lon: p[1], cum });
+      });
+    });
+    FOLLOW.line = pts; FOLLOW.starts = starts; FOLLOW.total = cum; FOLLOW.at = 0; FOLLOW.turnSaid = new Set();
+  }
+  function bikeProgress(lat, lon) {
+    const pts = FOLLOW.line;
+    let best = -1, bd = Infinity, along = 0;
+    // Look near where the rider was, so a road passing twice nearby does not confuse the position.
+    const from = Math.max(1, FOLLOW.at - 40), to = Math.min(pts.length - 1, FOLLOW.at + 400);
+    for (let k = from; k <= to; k++) {
+      const a = pts[k - 1], b = pts[k];
+      const ax = (a.lon - lon) * KX, ay = (a.lat - lat) * KY, bx = (b.lon - lon) * KX, by = (b.lat - lat) * KY;
+      const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+      let t = l2 ? -(ax * dx + ay * dy) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
+      const d = Math.hypot(ax + t * dx, ay + t * dy);
+      if (d < bd) { bd = d; best = k; along = a.cum + t * (b.cum - a.cum); }
+    }
+    if (best > 0 && bd < 80) FOLLOW.at = best;
+    return { along, off: bd };
+  }
+  function bikeFollowStep(lat, lon) {
+    const o = FOLLOW.option, groups = o.r.groups, v = o.vehicle;
+    $('fRecalc').hidden = true;
+    const badge = `<span class="bk-badge">${icon(VEH_ICON[v])}</span>`;
+    if (lat === null) {
+      // No GPS: the rider moves through the steps by hand.
+      const g = groups[FOLLOW.i];
+      if (!g) { showFollow('Llegaste', `Estás cerca de ${state.to.name}.`, 'good', badge, 'Llegaste a tu destino.'); $('fNext').hidden = true; return; }
+      $('fNext').hidden = false;
+      const said = stepText(g, v, FOLLOW.i === 0 ? 'first' : FOLLOW.i === groups.length - 1 ? 'last' : '');
+      showFollow(said, `${kmLabel(g.len)} · ${KIND_LABEL[kindClass(g, isMotor(v))] || ''}`.replace(/ · $/, ''), '', badge, said);
+      return;
+    }
+    const p = bikeProgress(lat, lon), left = FOLLOW.total - p.along;
+    if (left < 35 || dist(lat, lon, state.to.lat, state.to.lon) < 40) { showFollow('Llegaste', `Estás cerca de ${state.to.name}.`, 'good', badge, 'Llegaste a tu destino.'); $('fNext').hidden = true; return; }
+    $('fNext').hidden = true;
+    if (p.off > 70) {
+      showFollow('Te saliste de la ruta', `Estás a ${distLabel(p.off)} del recorrido.`, 'alert', badge, 'Te saliste de la ruta.');
+      $('fRecalc').hidden = false;
+      return;
+    }
+    let k = 0; while (k + 1 < groups.length && FOLLOW.starts[k + 1] <= p.along + 5) k++;
+    // The next thing to do: a turn, getting off, or the bike path ending. "Keep going" on the same kind of way is not news.
+    const onBike = g => (g.kind === 'walk' ? 'walk' : g.kind === 'calle' ? 'calle' : 'infra');
+    let j = k + 1;
+    while (j < groups.length && groups[j].turn === 'sigue' && onBike(groups[j]) === onBike(groups[j - 1])) j++;
+    const cur = groups[k], next = groups[j], toNext = next ? FOLLOW.starts[j] - p.along : left;
+    const sub = `Vas por ${cur.kind === 'walk' ? 'a pie' : whereText(cur)}${speedFor(cur, v) ? ` · ${speedFor(cur, v)}` : ''}`;
+    if (!next) { showFollow(`Sigue ${distLabel(left)} hasta tu destino`, sub, '', badge, ''); return; }
+    const ends = next.turn === 'sigue' && onBike(next) === 'calle' ? 'Se acaba la ciclorruta. ' : '';
+    const what = ends + stepText(next, v, j === groups.length - 1 ? 'last' : ''), lower = what[0].toLowerCase() + what.slice(1);
+    const soon = toNext < 40;
+    showFollow(soon ? `Ahora: ${lower}` : `En ${distLabel(toNext)}: ${lower}`, sub, soon ? 'alert' : '', badge, '');
+    // A voice once well before the turn, and once at it.
+    if (toNext < 150 && toNext >= 40 && !FOLLOW.turnSaid.has(j + ':far')) { FOLLOW.turnSaid.add(j + ':far'); Voice.say(`En ${Math.round(toNext / 10) * 10} metros, ${lower}.`); }
+    if (soon && !FOLLOW.turnSaid.has(j + ':now')) { FOLLOW.turnSaid.add(j + ':now'); Voice.beep(1); Voice.say(`Ahora, ${lower}.`, true); }
+  }
+
   // ---------- events ----------
   document.addEventListener('click', e => {
     const t = e.target.closest('button'); if (!t) return;
-    if (t.dataset.limit) { state.limit = +t.dataset.limit; persist(); render(); }
+    if (t.dataset.travel) setTravel(t.dataset.travel);
+    else if (t.dataset.veh) { setVehicle(t.dataset.veh); render(); }
+    else if (t.dataset.bikePref) { state.bikePref = t.dataset.bikePref; persist(); render(); }
+    else if (t.dataset.openVeh) openVehSheet();
+    else if (t.dataset.pickVeh) { setVehicle(t.dataset.pickVeh); $('vehSheet').hidden = true; render(); window.scrollTo(0, 0); }
+    else if (t.id === 'vehClose') $('vehSheet').hidden = true;
+    else if (t.dataset.bikeLoad) { BIKE.allowed = true; render(); }
+    else if (t.dataset.limit) { state.limit = +t.dataset.limit; persist(); render(); }
     else if (t.dataset.walk) { state.walk = +t.dataset.walk; persist(); render(); }
     else if (t.dataset.pref) { state.pref = t.dataset.pref; persist(); render(); }
     else if (t.dataset.card) { state.card = t.dataset.card; persist(); render(); }
@@ -1925,7 +2424,10 @@ window.SVBoot = function (networkText) {
       locate().then(g => { if (!g) return; MAP.me = { lat: g.lat, lon: g.lon }; refreshMapData(); if (MAP.mode === 'pick') { const z = RM.map && !$('realMap').hidden ? RM.map.getZoom() : 16; pickGeo(g.lat, g.lon, 0.01); void z; } if (RM.ready && !$('realMap').hidden) RM.map.easeTo({ center: [g.lon, g.lat], zoom: 15 }); });
     }
     else if (t.id === 'mapUse' && MAP.picked) choose(MAP.picked, true);
-    else if (t.id === 'fNext') { FOLLOW.i = Math.min(FOLLOW.stages.length - 1, FOLLOW.i + 1); followStep(state.gps ? state.gps.lat : null, state.gps ? state.gps.lon : null); }
+    else if (t.id === 'fNext') {
+      if (FOLLOW.option && FOLLOW.option.bike) { FOLLOW.i = Math.min(FOLLOW.option.r.groups.length, FOLLOW.i + 1); bikeFollowStep(null, null); }
+      else { FOLLOW.i = Math.min(FOLLOW.stages.length - 1, FOLLOW.i + 1); followStep(state.gps ? state.gps.lat : null, state.gps ? state.gps.lon : null); }
+    }
     else if (t.id === 'fEnd') stopFollow();
     else if (t.id === 'fRecalc') { stopFollow(); locate().then(g => { if (g) { state.from = gpsPlace(); state.fromGps = true; state.mode = 'now'; } render(); }); }
     else if (t.id === 'installApp' && deferredInstall) { deferredInstall.prompt(); deferredInstall.userChoice.finally(() => { deferredInstall = null; $('installApp').hidden = true; }); }
@@ -1937,7 +2439,7 @@ window.SVBoot = function (networkText) {
   $('routesQuery').addEventListener('input', e => { clearTimeout(routesTimer); routesTimer = setTimeout(() => { routesUi.q = e.target.value; routesUi.at = null; routesUi.shown = 40; renderRoutes(); $('routesList').scrollTop = 0; }, 120); });
   $('day').addEventListener('change', e => { state.day = +e.target.value; render(); });
   $('time').addEventListener('change', e => { if (e.target.value) { state.time = e.target.value; render(); } });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !FOLLOW.active) { if (!$('helpSheet').hidden) $('helpSheet').hidden = true; else if (!$('reportSheet').hidden) $('reportSheet').hidden = true; else if (!$('legalSheet').hidden) $('legalSheet').hidden = true; else if (!$('mapSheet').hidden) $('mapSheet').hidden = true; else if (!$('routesSheet').hidden) $('routesSheet').hidden = true; else if (!$('picker').hidden) { $('picker').hidden = true; state.savingFav = null; render(); } } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !FOLLOW.active) { if (!$('vehSheet').hidden) $('vehSheet').hidden = true; else if (!$('helpSheet').hidden) $('helpSheet').hidden = true; else if (!$('reportSheet').hidden) $('reportSheet').hidden = true; else if (!$('legalSheet').hidden) $('legalSheet').hidden = true; else if (!$('mapSheet').hidden) $('mapSheet').hidden = true; else if (!$('routesSheet').hidden) $('routesSheet').hidden = true; else if (!$('picker').hidden) { $('picker').hidden = true; state.savingFav = null; render(); } } });
   let deferredInstall = null;
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; $('installApp').hidden = false; });
 
@@ -1970,9 +2472,19 @@ window.SVBoot = function (networkText) {
   function tripLink() {
     if (!WEB) return '';
     const a = shareablePlace(state.from), b = shareablePlace(state.to);
-    return `${location.origin}${location.pathname}#de=${placeParam(a)}&a=${placeParam(b)}&max=${state.limit}`;
+    return `${location.origin}${location.pathname}#de=${placeParam(a)}&a=${placeParam(b)}${state.travel === 'bus' ? `&max=${state.limit}` : `&modo=${state.travel}&veh=${vehicle()}`}`;
   }
   async function shareTrip(o) {
+    if (o.bike) {
+      const from = shareablePlace(state.from).name, x = o.r, main = x.groups.filter(g => g.kind !== 'walk' && g.name).sort((a, b) => b.len - a.len)[0];
+      const how = isMotor(o.vehicle) ? 'por la calzada' : `${x.pct} % por ciclorruta o bicicarril`;
+      const text = `Voy en ${VEH_WORD[o.vehicle]} de ${from} a ${state.to.name}: unos ${mins(x.sec)} min y ${kmLabel(x.dist)}, ${how}${main ? `, sobre todo por ${whereText(main)}` : ''}.`, url = tripLink();
+      try { if (navigator.share) { await navigator.share({ title: 'Mi ruta en Sin Vueltas', text, url: url || undefined }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+      const all = url ? `${text} ${url}` : text;
+      try { await navigator.clipboard.writeText(all); announce('Ruta copiada. Pégala en WhatsApp o donde quieras.'); toast('Ruta copiada. Pégala en WhatsApp o donde quieras.'); }
+      catch (e) { window.open(`https://wa.me/?text=${encodeURIComponent(all)}`, '_blank', 'noopener'); }
+      return;
+    }
     const rides = o.legs.filter(l => l.type === 'ride');
     const from = shareablePlace(state.from).name, steps = rides.map((l, i) => `${i ? 'luego ' : ''}el ${l.code} en ${pretty(l.boardPlace.name)} y me bajo en ${pretty(l.alightPlace.name)}`).join(', ');
     const text = `Voy de ${from} a ${state.to.name}: tomo ${steps}. Llego cerca de las ${clock(o.arrive)}`, url = tripLink();
@@ -1995,6 +2507,9 @@ window.SVBoot = function (networkText) {
     if (!a || !b) return false;
     state.from = a; state.to = b; state.fromGps = false; state.mode = 'now'; state.example = false;
     if ([1, 2, 3].includes(+h.get('max'))) state.limit = +h.get('max');
+    const modo = h.get('modo'), veh = h.get('veh');
+    if (modo === 'bici' || modo === 'electrico') { state.travel = modo; if (VEH_ORDER[modo].includes(veh)) state[modo === 'bici' ? 'bikeVeh' : 'elecVeh'] = veh; }
+    else if (h.get('max')) state.travel = 'bus';
     history.replaceState(null, '', location.pathname + location.search);
     return true;
   }
@@ -2036,10 +2551,18 @@ window.SVBoot = function (networkText) {
     try { if ('caches' in window) await caches.delete(DATA_CACHE); } catch (e) { /* nothing saved */ }
     location.reload();
   }
-  const REPORT_KINDS = ['La ruta ya no pasa por ahí o cambió de recorrido', 'La parada no existe, está cerrada o se movió', 'El bus tiene otro código o destino', 'Los tiempos están muy lejos de la realidad', 'Otra cosa'];
+  const BUS_KINDS = ['La ruta ya no pasa por ahí o cambió de recorrido', 'La parada no existe, está cerrada o se movió', 'El bus tiene otro código o destino', 'Los tiempos están muy lejos de la realidad', 'Otra cosa'];
+  const BIKE_KINDS = ['La ciclorruta no existe, está cerrada o en obra', 'Hay una señal que prohíbe mi vehículo en ese tramo', 'La calle va en otro sentido', 'El camino es peligroso o está en mal estado', 'Los tiempos están muy lejos de la realidad', 'Otra cosa'];
+  let REPORT_KINDS = BUS_KINDS;
   let reportOption = null;
   function reportText() {
     const o = reportOption, q = currentQuery();
+    if (o.bike) {
+      const picked = [...document.querySelectorAll('#reportKinds input:checked')].map(x => REPORT_KINDS[+x.value]);
+      const from = state.from.kind === 'gps' ? 'mi ubicación' : state.from.name;
+      return ['Sin Vueltas: reporte de error (ruta en ' + VEH_WORD[o.vehicle] + ')', `Mapa de ciclorrutas del ${dayLabel(BINFO.built || '2026-11-08')}`, `Viaje: ${from} → ${state.to.name}`, `Salida: ${q.label}`,
+        ...o.r.groups.map((g, i) => `- ${stepText(g, o.vehicle, i === 0 ? 'first' : '')} (${kmLabel(g.len)})`), `Problema: ${picked.length ? picked.join('; ') : 'sin marcar'}`, `Detalles: ${$('reportNote').value.trim() || 'sin detalles'}`].join('\n');
+    }
     const rides = o.legs.filter(l => l.type === 'ride').map(l => `${l.code} hacia ${pretty(l.dest)}: de ${pretty(l.boardPlace.name)} a ${pretty(l.alightPlace.name)}`);
     const picked = [...document.querySelectorAll('#reportKinds input:checked')].map(x => REPORT_KINDS[+x.value]);
     const from = state.from.kind === 'gps' ? `cerca de ${nearestLabel(state.from.lat, state.from.lon)}` : state.from.name;
@@ -2056,6 +2579,8 @@ window.SVBoot = function (networkText) {
   }
   function openReport(o) {
     reportOption = o;
+    REPORT_KINDS = o.bike ? BIKE_KINDS : BUS_KINDS;
+    $('reportNote').placeholder = o.bike ? 'Por ejemplo: la ciclorruta de la Calle 53 está cerrada por obras desde octubre' : 'Por ejemplo: desde octubre el B28 ya no para en La Castellana';
     $('reportKinds').innerHTML = REPORT_KINDS.map((k, i) => `<label class="check"><input type="checkbox" value="${i}"><span>${esc(k)}</span></label>`).join('');
     $('reportNote').value = '';
     renderReport();
@@ -2090,7 +2615,7 @@ window.SVBoot = function (networkText) {
     announce([head.textContent, part('.big'), part('.arrive'), part('.price')].filter(Boolean).map(x => x.replace(/\.$/, '')).join('. '));
   }
   // Focus goes into a sheet when it opens and back where it was when it closes, and the page behind cannot be reached.
-  const SHEETS = [$('picker'), $('routesSheet'), $('mapSheet'), $('legalSheet'), $('reportSheet'), $('helpSheet')], shell = document.querySelector('.shell');
+  const SHEETS = [$('picker'), $('routesSheet'), $('mapSheet'), $('legalSheet'), $('reportSheet'), $('helpSheet'), $('vehSheet')], shell = document.querySelector('.shell');
   const openSheet = () => SHEETS.filter(s => !s.hidden).pop() || null;
   let topSheet = null, returnTo = null;
   function sheetsChanged() {
@@ -2101,7 +2626,7 @@ window.SVBoot = function (networkText) {
     shell.inert = !!top;
     if (top) shell.setAttribute('aria-hidden', 'true'); else shell.removeAttribute('aria-hidden');
     (top || document.body).appendChild($('announce'));
-    if (top) { ({ picker: $('pickerTitle'), routesSheet: routesUi.at ? $('routesList') : $('routesQuery'), mapSheet: $('mapTitle'), legalSheet: $('legalTitle'), reportSheet: $('reportTitle'), helpSheet: $('helpTitle') })[top.id].focus(); return; }
+    if (top) { ({ picker: $('pickerTitle'), routesSheet: routesUi.at ? $('routesList') : $('routesQuery'), mapSheet: $('mapTitle'), legalSheet: $('legalTitle'), reportSheet: $('reportTitle'), helpSheet: $('helpTitle'), vehSheet: $('vehTitle') })[top.id].focus(); return; }
     if (returnTo && returnTo.isConnected && returnTo.offsetParent !== null) returnTo.focus();
     else $('results').focus({ preventScroll: true });
   }
@@ -2137,5 +2662,5 @@ window.SVBoot = function (networkText) {
       locate().then(g => { if (g && state.from && state.from.kind === 'gps') state.from = gpsPlace(); render(); });
     }).catch(() => {});
   }
-  window.__sinVueltas = { state, E, FOLLOW, Planner, MAP, RM, Streets, rideLine, render, Update, checkForUpdate, Photon }; // handy when debugging on a phone
+  window.__sinVueltas = { state, E, FOLLOW, Planner, MAP, RM, Streets, rideLine, render, Update, checkForUpdate, Photon, BIKE, loadBike, bikeAsk, followStep, startFollow }; // handy when debugging on a phone
 };

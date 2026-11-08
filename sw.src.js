@@ -40,13 +40,14 @@ function routeData(req) {
   })));
 }
 
-// The street-corner table: kept like the routes, but each build of it has its own address (?b=), and an older one is
-// thrown away when the new one arrives.
-function gridData(req) {
+// The street-corner table and the bike map: kept like the routes, but each build of them has its own address (?b=),
+// and an older one is thrown away when the new one arrives.
+function builtData(req, name) {
+  const same = new RegExp('/' + name + '\\.json');
   return caches.open(DATA).then(c => c.match(req).then(hit => hit || fetch(req).then(res => {
     if (res.ok) {
       c.put(req, res.clone());
-      c.keys().then(keys => keys.filter(k => /\/grid\.json/.test(k.url) && k.url !== req.url).forEach(k => c.delete(k)));
+      c.keys().then(keys => keys.filter(k => same.test(k.url) && k.url !== req.url).forEach(k => c.delete(k)));
     }
     return res;
   })));
@@ -59,7 +60,8 @@ self.addEventListener('fetch', e => {
     // A request with ?v= is the page asking for a newer copy, and version.json must always be fresh.
     if (url.searchParams.has('v') || url.pathname.endsWith('/version.json')) return;
     if (/\/(network|shapes)\.json$/.test(url.pathname)) { e.respondWith(routeData(req)); return; }
-    if (/\/grid\.json$/.test(url.pathname)) { e.respondWith(gridData(req)); return; }
+    if (/\/grid\.json$/.test(url.pathname)) { e.respondWith(builtData(req, 'grid')); return; }
+    if (/\/bike\.json$/.test(url.pathname)) { e.respondWith(builtData(req, 'bike')); return; }
     e.respondWith(ownFile(e));
     return;
   }

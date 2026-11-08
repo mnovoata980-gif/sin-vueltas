@@ -11,6 +11,11 @@
         <button type="button" class="btn primary" id="installApp" hidden>Instalar</button>
       </div>
     </header>
+    <div class="modes" role="group" aria-label="Cómo vas">
+      <button type="button" class="mode" data-travel="bus" aria-pressed="true"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3.5" width="14" height="14.5" rx="3"/><path d="M5 11.5h14M8 18v2.5M16 18v2.5M8.6 14.8h.01M15.4 14.8h.01"/></svg>Bus</button>
+      <button type="button" class="mode" data-travel="bici" aria-pressed="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="16" r="3.5"/><circle cx="18.5" cy="16" r="3.5"/><path d="M5.5 16 9.5 8.5h7M12 16 9.5 8.5M12 16l4.5-7.5 2 7.5M5.5 16H12M8 6h3M15.5 6h2l-1 2.5"/></svg>Bici</button>
+      <button type="button" class="mode" data-travel="electrico" aria-pressed="false"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2.5 5.5 13.5h5.5l-1 8 7.5-11h-5.5z"/></svg>Eléctrico</button>
+    </div>
     <h2 class="ask" id="ask">¿Para dónde vas?</h2>
     <form class="panel" id="panel" onsubmit="return false" aria-label="Tu viaje">
       <div class="panel-sum">
@@ -37,7 +42,11 @@
           </button>
         </div>
         <div class="quick" id="quick" hidden></div>
-        <div class="ctl limit-ctl">
+        <div class="ctl veh-ctl wheel-only">
+          <span class="lbl" id="vehLbl">Tu vehículo</span>
+          <div class="chips" id="vehChips" role="group" aria-labelledby="vehLbl"></div>
+        </div>
+        <div class="ctl limit-ctl bus-only">
           <span class="lbl" id="limitLbl">Máximo de buses</span>
           <div class="limit" role="group" aria-labelledby="limitLbl">
             <button type="button" data-limit="1">1<span class="buses" aria-hidden="true"><svg viewBox="0 0 8 10"><path d="M1.6 0h4.8A1.6 1.6 0 0 1 8 1.6v6H0v-6A1.6 1.6 0 0 1 1.6 0zM1 7.6h1.6v2.2H1zM5.4 7.6H7v2.2H5.4z"/></svg></span><small>directo</small></button>
@@ -48,7 +57,14 @@
         <details class="opts">
         <summary><span id="optsLabel"></span><span class="change">Cambiar</span></summary>
         <div class="opts-body">
-        <div class="ctl">
+        <div class="ctl wheel-only" id="bikePrefCtl">
+          <span class="lbl" id="bikePrefLbl">Qué ruta prefieres</span>
+          <div class="chips" role="group" aria-labelledby="bikePrefLbl">
+            <button type="button" class="chip" data-bike-pref="safe">Más ciclorruta</button>
+            <button type="button" class="chip" data-bike-pref="direct">Más directa</button>
+          </div>
+        </div>
+        <div class="ctl bus-only">
           <span class="lbl" id="prefLbl">Qué te importa más</span>
           <div class="chips" role="group" aria-labelledby="prefLbl">
             <button type="button" class="chip" data-pref="buses">Menos buses</button>
@@ -56,7 +72,7 @@
             <button type="button" class="chip" data-pref="walk">Caminar menos</button>
           </div>
         </div>
-        <div class="ctl">
+        <div class="ctl bus-only">
           <span class="lbl" id="cardLbl">Tu tarjeta TuLlave</span>
           <div class="chips" role="group" aria-labelledby="cardLbl">
             <button type="button" class="chip" data-card="plus">Personalizada</button>
@@ -64,7 +80,7 @@
             <button type="button" class="chip" data-card="unknown">No sé</button>
           </div>
         </div>
-        <div class="ctl">
+        <div class="ctl bus-only">
           <span class="lbl" id="walkLbl">Caminar en cada tramo, máximo</span>
           <div class="chips" role="group" aria-labelledby="walkLbl">
             <button type="button" class="chip" data-walk="5">5 min</button>
@@ -216,9 +232,10 @@
       <li>Sin Vueltas es gratuita y <b>no es oficial</b>. No pertenece a TransMilenio S.A. ni a la Alcaldía de Bogotá.</li>
       <li>Las rutas salen del archivo público de TransMilenio. Los tiempos son programados y los precios, estimados. El bus real puede retrasarse, desviarse o no pasar, y una estación puede estar cerrada: confírmalo en el lugar.</li>
       <li>La app no indica si una estación o un paradero es accesible: el archivo oficial no lo dice de forma confiable.</li>
+      <li>Las rutas en bici y en vehículo eléctrico son una sugerencia: la señalización y las autoridades en la vía mandan sobre ellas. Bogotá prohíbe los vehículos eléctricos livianos en tramos de ciclorruta que no publica en datos abiertos. Las reglas por vehículo resumen la Ley 2486 de 2025 y la Resolución 20263040030675 de 2026 y no son asesoría legal.</li>
       <li>No uses la app mientras conduces. En una emergencia llama al 123.</li>
       <li>La app se ofrece tal como está y sin garantía de que la información sea exacta o esté disponible.</li>
-      <li>Mapa y direcciones: © colaboradores de OpenStreetMap, con licencia ODbL. Imágenes del mapa: OpenFreeMap y OpenMapTiles. Búsqueda: Photon.</li>
+      <li>Mapa y direcciones: © colaboradores de OpenStreetMap, con licencia ODbL. Imágenes del mapa: OpenFreeMap y OpenMapTiles. Búsqueda: Photon. Ciclorrutas: red de biciusuarios del IDU publicada por IDECA; ciclovía: IDRD; cicloparqueaderos: IDECA, todos con licencia CC BY 4.0.</li>
     </ul>
   </div>
 </div>
@@ -240,6 +257,7 @@
       <li><b>SITP zonal</b>: buses que andan por la calle y paran en paraderos. En la app sus placas son azules.</li>
       <li><b>Tarjeta TuLlave personalizada</b>: la registras con tu documento. Con ella tienes hasta 2 transbordos sin costo en 125 minutos. Con una tarjeta sin personalizar pagas cada bus.</li>
       <li><b>Rutas</b>: con el botón «Rutas», arriba, buscas cualquier bus por su código, su destino o una estación, y ves todas sus paradas en orden.</li>
+      <li><b>Bici y eléctrico</b>: arriba eliges si vas en bus, en bici o en un vehículo eléctrico. En bici la ruta prefiere ciclorrutas y te dice dónde no las hay. Cada vehículo va solo por donde la norma lo permite: una bici-moto o ciclomotor nunca entra a la ciclorruta, y nadie rueda por andenes.</li>
       <li><b>Transbordo</b>: cambiar de bus. Dentro de la misma estación no se paga de nuevo. Salir de una estación y entrar a otra sí se cobra.</li>
       <li><b>Accesibilidad</b>: el archivo oficial marca todas las paradas como accesibles, pero en la calle no siempre hay rampa, ascensor o andén en buen estado. Por eso la app no promete accesibilidad. Si usas silla de ruedas o caminador, confírmalo antes de salir.</li>
     </ul>
@@ -252,6 +270,16 @@
     <h4>Instalar la app</h4>
     <div id="installSteps"></div>
   </div>
+</div>
+
+<div class="sheet" id="vehSheet" hidden role="dialog" aria-modal="true" aria-labelledby="vehTitle" style="z-index:45">
+  <div class="sheet-head">
+    <h3 id="vehTitle" tabindex="-1">¿Qué vehículo tienes?</h3>
+    <button type="button" class="icon-btn" id="vehClose" aria-label="Cerrar">
+      <svg width="20" height="20" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 3l12 12M15 3L3 15"/></svg>
+    </button>
+  </div>
+  <div class="list legal veh-list" id="vehList"></div>
 </div>
 
 <div class="sheet" id="reportSheet" hidden role="dialog" aria-modal="true" aria-labelledby="reportTitle" style="z-index:45">

@@ -23,12 +23,15 @@ const FONTS = `<script>(function () {
   if (choice === 'on' || (choice !== 'off' && signal)) document.documentElement.setAttribute('data-lite', ''); else window.SVLite.font();
 })();</script>`;
 const css = r('app.css'), engine = safe(r('js/engine.js')), geo = safe(r('js/geo.js')), app = safe(r('js/app.js')), data = r('data/network.json'), streets = r('data/shapes.json');
+// Bike and electric vehicles: the street and bike-lane graph (tools/build-bike.js, rebuilt by hand every few months),
+// its engine, and the rules per vehicle (small, so they travel inside the page and show before the graph loads).
+const bikeEngine = safe(r('js/bike.js')), bikeData = r('data/bike.json'), bikeMeta = JSON.parse(bikeData).meta, bikeRules = r('data/bike-rules.json');
 const meta = JSON.parse(data).meta;
 // Every corner of numbered streets, to place addresses by the city's grid (tools/build-grid.js). Rebuilt by hand now and then.
 const grid = r('data/grid.json'), gridBuilt = JSON.parse(grid).meta.built;
 // The owner's own choices (name, contact, where error reports go). Empty fields stay empty: the app says so instead of inventing them.
 const config = fs.existsSync(path.join(__dirname, 'config.json')) ? JSON.parse(r('config.json')) : {};
-const CONFIG = `<script>window.SV_CONFIG = ${JSON.stringify({ owner: config.owner || '', contact: config.contact || '', reportEmail: config.reportEmail || '', reportForm: config.reportForm || '' }).replace(/</g, '\\u003c')}; window.SV_GRID = '${gridBuilt}';</script>`;
+const CONFIG = `<script>window.SV_CONFIG = ${JSON.stringify({ owner: config.owner || '', contact: config.contact || '', reportEmail: config.reportEmail || '', reportForm: config.reportForm || '' }).replace(/</g, '\\u003c')}; window.SV_GRID = '${gridBuilt}'; window.SV_BIKE = ${JSON.stringify({ built: bikeMeta.built, stats: bikeMeta.stats })}; window.SV_BIKE_RULES = ${JSON.stringify(JSON.parse(bikeRules)).replace(/</g, '\\u003c')};</script>`;
 const body = r('index.src.html');
 
 const LOADER = `(function () {
@@ -67,6 +70,7 @@ ${FONTS}
 const webScripts = `<script>window.SV_TARGET = 'web';</script>
 ${CONFIG}
 <script id="engineSrc">${engine}</script>
+<script id="bikeSrc">${bikeEngine}</script>
 <script>${geo}</script>
 <script>${app}</script>
 <script>${LOADER}</script>
@@ -77,6 +81,7 @@ write('site/index.html', site);
 write('site/network.json', data);
 write('site/shapes.json', streets);
 write('site/grid.json', grid);
+write('site/bike.json', bikeData);
 write('site/manifest.webmanifest', JSON.stringify({
   name: 'Sin Vueltas', short_name: 'Sin Vueltas', description: 'Rutas de TransMilenio y SITP con el número de buses que tú decides.',
   lang: 'es', start_url: '.', scope: '.', display: 'standalone', background_color: '#9a4422', theme_color: '#9a4422',
@@ -95,13 +100,15 @@ const previewHead = `<title>Sin Vueltas</title>\n<meta name="claude:viewport-fit
 const previewScripts = `<script type="application/json" id="network">${data.replace(/<\//g, '<\\/')}</script>
 <script type="application/json" id="shapes">${streets}</script>
 <script type="application/json" id="gridData">${grid}</script>
+<script type="application/json" id="bikeData">${bikeData}</script>
 <script>window.SV_TARGET = 'preview';</script>
 ${CONFIG}
 <script id="engineSrc">${engine}</script>
+<script id="bikeSrc">${bikeEngine}</script>
 <script>${geo}</script>
 <script>${app}</script>
 <script>${LOADER}</script>`;
 write('dist/index.html', fill(fill(body, '<!--__HEAD__-->', previewHead), '<!--__SCRIPTS__-->', previewScripts));
 
 const size = f => (fs.statSync(path.join(__dirname, f)).size / 1048576).toFixed(2) + ' MB';
-console.log(`rutas del ${meta.feed} | site/index.html ${size('site/index.html')} | site/network.json ${size('site/network.json')} | dist/index.html ${size('dist/index.html')}`);
+console.log(`rutas del ${meta.feed} | site/index.html ${size('site/index.html')} | site/network.json ${size('site/network.json')} | site/bike.json ${size('site/bike.json')} (red del ${bikeMeta.built}) | dist/index.html ${size('dist/index.html')}`);

@@ -1,0 +1,78 @@
+{
+  "_pending": "Los 108 puntos se piden a la Secretaría de Movilidad con docs/carta-puntos-restringidos.md. Cuando lleguen, van en closed: [{ \"name\": ..., \"vehicles\": [\"ebici\", \"patineta\"], \"line\": [[lat, lon], ...] }] y se corre node tools/build-bike.js.",
+  "_info": "Reglas de circulación por vehículo para el modo Bici y Eléctrico. Se pueden cambiar sin tocar el código: tools/build-bike.js las copia a data/bike.json. Revisado el 8 de noviembre de 2026 contra el texto oficial de la Ley 2486 de 2025 (art. 3, que agrega el art. 96-1 al Código de Tránsito; art. 15) y la Resolución 20263040030675 del 4 de agosto de 2026 del Ministerio de Transporte (Anexo 80, arts. 5.16.1.3 a 5.16.1.6).",
+  "checked": "2026-11-08",
+  "vehicles": {
+    "bici": {
+      "name": "Bicicleta",
+      "group": "bike",
+      "kmh": 15,
+      "cicloinfra": true,
+      "calzada": true,
+      "andenes": false,
+      "maxCiclo": 0,
+      "maxRoad": 0,
+      "needs": "Sin licencia, SOAT ni placa.",
+      "law": "Código Nacional de Tránsito, art. 94: por la derecha de la vía, nunca por andenes ni carriles exclusivos de transporte público."
+    },
+    "ebici": {
+      "name": "Bici eléctrica",
+      "detail": "De pedaleo asistido: el motor solo ayuda mientras pedaleas y se corta a 25 km/h. Sin acelerador.",
+      "group": "velmpu",
+      "kmh": 20,
+      "cicloinfra": true,
+      "calzada": true,
+      "andenes": false,
+      "maxCiclo": 25,
+      "maxRoad": 40,
+      "needs": "Sin licencia, SOAT ni matrícula. Casco certificado. Prenda reflectiva de 6:00 p. m. a 6:00 a. m.",
+      "law": "Resolución 20263040030675 de 2026, Anexo 80, nota 3: si tiene acelerador o anda sin pedalear, no es bicicleta eléctrica."
+    },
+    "patineta": {
+      "name": "Patineta eléctrica",
+      "detail": "Patineta, monociclo u otro vehículo de movilidad personal de hasta 1.000 W y 40 km/h, de una sola plaza y sin sillín.",
+      "group": "velmpu",
+      "kmh": 20,
+      "cicloinfra": true,
+      "calzada": true,
+      "andenes": false,
+      "maxCiclo": 25,
+      "maxRoad": 40,
+      "minAge": 16,
+      "needs": "Sin licencia, SOAT ni matrícula. Casco certificado, luz blanca adelante y roja atrás, prenda reflectiva de 6:00 p. m. a 6:00 a. m. Lámina de identificación desde el 1 de enero de 2027.",
+      "law": "Ley 2486 de 2025, art. 96-1: usar la cicloinfraestructura cuando exista y esté en buen estado; sin ella, el carril derecho. Nunca andenes ni carriles de transporte público. Máximo 25 km/h en cicloinfraestructura y 40 km/h en las demás vías permitidas."
+    },
+    "ciclomotor": {
+      "name": "Bici-moto o ciclomotor",
+      "detail": "Con acelerador, o con asiento, o de más de 1.000 W, hasta 45 km/h y 4.000 W. Para la norma es un automotor (clase L1e), aunque tenga pedales.",
+      "group": "moped",
+      "kmh": 28,
+      "cicloinfra": false,
+      "calzada": true,
+      "andenes": false,
+      "maxCiclo": 0,
+      "maxRoad": 45,
+      "needs": "Si pesa más de 60 kg y puede pasar de 40 km/h, necesita matrícula, SOAT y licencia. Si no, está exento (Ley 2486, art. 15). Casco siempre.",
+      "law": "Resolución 20263040030675 de 2026, Anexo 80: ciclo de motor L1e-A y ciclomotor L1e-B son automotores. Van por la calzada: la cicloinfraestructura es para bicicletas y vehículos de movilidad personal."
+    },
+    "moto": {
+      "name": "Moto eléctrica",
+      "detail": "Más de 45 km/h o más de 4.000 W. Es una motocicleta como cualquier otra.",
+      "group": "moto",
+      "kmh": 30,
+      "cicloinfra": false,
+      "calzada": true,
+      "andenes": false,
+      "maxCiclo": 0,
+      "maxRoad": 0,
+      "needs": "Matrícula, SOAT, licencia de moto y casco.",
+      "law": "Código Nacional de Tránsito: por la calzada, nunca por ciclorrutas, andenes ni carriles exclusivos de TransMilenio."
+    }
+  },
+  "bogota": {
+    "puntos": "La Secretaría Distrital de Movilidad prohíbe los vehículos eléctricos livianos en 108 puntos críticos de ciclorruta de 14 localidades, señalizados en la vía. La lista no está publicada, así que la app todavía no los evita: si ves la señal, bájate o toma la calzada.",
+    "ciclovia": "Domingos y festivos de 7:00 a. m. a 2:00 p. m. Máximo 25 km/h para vehículos eléctricos livianos. Las calzadas de la ciclovía se cierran a carros y motos.",
+    "multa": "Circular por donde no está permitido es infracción y puede llevar a inmovilizar el vehículo."
+  },
+  "closed": []
+}
